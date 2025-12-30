@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/app';
 import { fetchConversations, fetchStats } from '../lib/api';
+import { EnrichmentPanel } from './EnrichmentPanel';
 import type { ChatConversation } from '@claudin/shared';
 
 export function Sidebar() {
@@ -125,6 +126,8 @@ export function Sidebar() {
             </div>
           </div>
         </div>
+
+        <EnrichmentPanel />
 
         <div className="space-y-1">
           <button

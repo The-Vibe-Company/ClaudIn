@@ -153,6 +153,19 @@ export function initDatabase(): Database.Database {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Enrichment queue (profiles to visit and scrape)
+    CREATE TABLE IF NOT EXISTS enrichment_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      public_identifier TEXT NOT NULL UNIQUE,
+      url TEXT NOT NULL,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
+      attempts INTEGER DEFAULT 0,
+      queued_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      started_at TEXT,
+      completed_at TEXT,
+      error TEXT
+    );
+
     -- Indexes
     CREATE INDEX IF NOT EXISTS idx_profiles_company ON profiles(current_company);
     CREATE INDEX IF NOT EXISTS idx_profiles_title ON profiles(current_title);
@@ -163,6 +176,7 @@ export function initDatabase(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_messages_sent ON messages(sent_at);
     CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author_public_identifier);
     CREATE INDEX IF NOT EXISTS idx_posts_posted ON posts(posted_at);
+    CREATE INDEX IF NOT EXISTS idx_enrichment_status ON enrichment_queue(status);
   `);
 
   cleanupDuplicatedText();

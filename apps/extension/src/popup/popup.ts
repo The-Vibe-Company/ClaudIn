@@ -1,3 +1,5 @@
+const SERVER_URL = 'http://localhost:3847/api';
+
 async function updateStats() {
   const data = await chrome.storage.local.get(['claudin_profiles', 'claudin_messages', 'claudin_posts', 'claudin_stats']);
   
@@ -29,6 +31,33 @@ async function updateStats() {
       ? `Last: ${formatTimeAgo(stats.lastServerSync)}`
       : '';
   }
+  
+  await updateQueueStatus();
+}
+
+async function updateQueueStatus() {
+  try {
+    const res = await fetch(`${SERVER_URL}/enrich/status`);
+    if (!res.ok) return;
+    
+    const { pending, processing, completed, total } = await res.json();
+    
+    const queueSection = document.getElementById('queueSection');
+    const queueBadge = document.getElementById('queueBadge');
+    const queuePending = document.getElementById('queuePending');
+    const queueProcessing = document.getElementById('queueProcessing');
+    const queueCompleted = document.getElementById('queueCompleted');
+    
+    if (total > 0 && queueSection) {
+      queueSection.style.display = 'block';
+      if (queueBadge) queueBadge.textContent = (pending + processing).toString();
+      if (queuePending) queuePending.textContent = pending.toString();
+      if (queueProcessing) queueProcessing.textContent = processing.toString();
+      if (queueCompleted) queueCompleted.textContent = completed.toString();
+    } else if (queueSection) {
+      queueSection.style.display = 'none';
+    }
+  } catch {}
 }
 
 function formatTimeAgo(dateStr: string): string {

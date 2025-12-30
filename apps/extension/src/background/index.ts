@@ -32,10 +32,12 @@ const STORAGE_KEYS = {
 const ALARM_NAMES = {
   AUTO_SYNC: 'claudin_auto_sync',
   FEED_REFRESH: 'claudin_feed_refresh',
+  ENRICHMENT_CHECK: 'claudin_enrichment_check',
 } as const;
 
 const SYNC_INTERVAL_MINUTES = 5;
 const FEED_REFRESH_INTERVAL_MINUTES = 15;
+const ENRICHMENT_CHECK_INTERVAL_MINUTES = 1;
 
 const SERVER_URL = 'http://localhost:3847/api';
 
@@ -239,7 +241,12 @@ async function setupAlarms() {
     periodInMinutes: FEED_REFRESH_INTERVAL_MINUTES,
   });
   
-  console.log(`[ClaudIn] Alarms set: sync every ${SYNC_INTERVAL_MINUTES}min, feed refresh every ${FEED_REFRESH_INTERVAL_MINUTES}min`);
+  await chrome.alarms.create(ALARM_NAMES.ENRICHMENT_CHECK, {
+    delayInMinutes: 0.5,
+    periodInMinutes: ENRICHMENT_CHECK_INTERVAL_MINUTES,
+  });
+  
+  console.log(`[ClaudIn] Alarms set: sync every ${SYNC_INTERVAL_MINUTES}min, feed refresh every ${FEED_REFRESH_INTERVAL_MINUTES}min, enrichment check every ${ENRICHMENT_CHECK_INTERVAL_MINUTES}min`);
 }
 
 async function refreshLinkedInFeed() {
@@ -265,6 +272,78 @@ async function refreshLinkedInFeed() {
   }
 }
 
+let isEnrichmentRunning = false;
+
+async function processEnrichmentQueue() {
+  if (isEnrichmentRunning) {
+    console.log('[ClaudIn] Enrichment already running, skipping');
+    return;
+  }
+  
+  try {
+    isEnrichmentRunning = true;
+    
+    const res = await fetch(`${SERVER_URL}/enrich/next`);
+    if (!res.ok) {
+      console.log('[ClaudIn] Failed to fetch enrichment task');
+      return;
+    }
+    
+    const { item } = await res.json();
+    if (!item) {
+      return;
+    }
+    
+    console.log(`[ClaudIn] Processing enrichment: ${item.publicIdentifier}`);
+    
+    const tab = await chrome.tabs.create({ 
+      url: item.url, 
+      active: false,
+    });
+    
+    if (!tab.id) {
+      await markEnrichmentComplete(item.publicIdentifier, false, 'Failed to create tab');
+      return;
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'FORCE_SCRAPE' });
+    } catch (e) {
+      console.log('[ClaudIn] Could not send scrape message, page may still be loading');
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    await syncToServer();
+    
+    try {
+      await chrome.tabs.remove(tab.id);
+    } catch {}
+    
+    await markEnrichmentComplete(item.publicIdentifier, true);
+    console.log(`[ClaudIn] Enrichment completed: ${item.publicIdentifier}`);
+    
+  } catch (error) {
+    console.error('[ClaudIn] Enrichment error:', error);
+  } finally {
+    isEnrichmentRunning = false;
+  }
+}
+
+async function markEnrichmentComplete(publicIdentifier: string, success: boolean, error?: string) {
+  try {
+    await fetch(`${SERVER_URL}/enrich/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ publicIdentifier, success, error }),
+    });
+  } catch (e) {
+    console.error('[ClaudIn] Failed to mark enrichment complete:', e);
+  }
+}
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   console.log(`[ClaudIn] Alarm triggered: ${alarm.name}`);
   
@@ -278,6 +357,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     case ALARM_NAMES.FEED_REFRESH: {
       const result = await refreshLinkedInFeed();
       console.log('[ClaudIn] Feed refresh result:', result);
+      break;
+    }
+    
+    case ALARM_NAMES.ENRICHMENT_CHECK: {
+      await processEnrichmentQueue();
       break;
     }
   }

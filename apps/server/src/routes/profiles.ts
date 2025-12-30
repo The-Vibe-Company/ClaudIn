@@ -197,6 +197,7 @@ profilesRouter.get('/crm/list', (c) => {
     current_title: string;
     profile_picture_url: string;
     location: string;
+    is_partial: number;
     last_message_content: string | null;
     last_message_at: string | null;
     last_message_direction: string | null;
@@ -214,6 +215,7 @@ profilesRouter.get('/crm/list', (c) => {
       currentTitle: p.current_title,
       profilePictureUrl: p.profile_picture_url,
       location: p.location,
+      isPartial: p.is_partial === 1,
       lastMessage: p.last_message_content ? {
         content: p.last_message_content,
         at: p.last_message_at,

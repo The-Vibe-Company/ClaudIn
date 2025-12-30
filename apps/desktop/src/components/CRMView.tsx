@@ -4,15 +4,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, 
   MapPin, 
-  Building2, 
   MessageSquare, 
   Calendar,
   ArrowUpRight,
   ArrowDownLeft,
   Loader2,
-  Users
+  Users,
+  ExternalLink,
+  AlertCircle,
+  Briefcase,
+  RefreshCw
 } from 'lucide-react';
-import { fetchCRMProfiles } from '../lib/api';
+import { open } from '@tauri-apps/plugin-shell';
+import { fetchCRMProfiles, queueProfileEnrichment } from '../lib/api';
 import type { CRMProfile } from '../lib/api';
 
 export function CRMView() {
@@ -41,9 +45,17 @@ export function CRMView() {
           </div>
           <div className="flex flex-col">
             <h1 className="text-lg font-bold text-text-primary leading-none">Network CRM</h1>
-            <span className="text-xs text-text-muted mt-1">
-              {data?.total ?? 0} connections found
-            </span>
+            <AnimatePresence mode="wait">
+              <motion.span 
+                key={data?.total ?? 0}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="text-xs text-text-muted mt-1"
+              >
+                {data?.total ?? 0} connections found
+              </motion.span>
+            </AnimatePresence>
           </div>
         </div>
 
@@ -70,16 +82,19 @@ export function CRMView() {
           </div>
         ) : isError ? (
           <div className="flex items-center justify-center h-full text-red-400 gap-2">
+            <AlertCircle className="w-5 h-5" />
             <span>Failed to load profiles. Please try again.</span>
           </div>
         ) : data?.profiles.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-text-muted gap-2">
-            <Users className="w-12 h-12 text-bg-tertiary mb-2" />
-            <span className="font-medium">No profiles found</span>
+            <div className="w-16 h-16 rounded-full bg-bg-secondary flex items-center justify-center mb-2">
+              <Users className="w-8 h-8 text-text-muted" />
+            </div>
+            <span className="font-medium text-lg text-text-primary">No profiles found</span>
             <span className="text-sm">Try adjusting your search terms</span>
           </div>
         ) : (
-          <div className="grid gap-3 max-w-5xl mx-auto">
+          <div className="grid gap-3 max-w-5xl mx-auto pb-10">
             <AnimatePresence mode='popLayout'>
               {data?.profiles.map((profile: CRMProfile, index: number) => (
                 <ProfileCard key={profile.id} profile={profile} index={index} />
@@ -93,6 +108,10 @@ export function CRMView() {
 }
 
 function ProfileCard({ profile, index }: { profile: CRMProfile; index: number }) {
+  const isPartial = profile.isPartial;
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncQueued, setSyncQueued] = useState(false);
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString(undefined, { 
       month: 'short', 
@@ -100,65 +119,158 @@ function ProfileCard({ profile, index }: { profile: CRMProfile; index: number })
     });
   };
 
+  const openLinkedIn = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await open(`https://linkedin.com/in/${profile.publicIdentifier}`);
+  };
+
+  const handleSync = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsSyncing(true);
+    try {
+      await queueProfileEnrichment(profile.publicIdentifier);
+      setSyncQueued(true);
+    } catch (err) {
+      console.error('Failed to queue sync:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
-      className="group bg-bg-secondary border border-border-subtle rounded-2xl p-4 
-                 hover:bg-bg-tertiary hover:border-accent-primary/30 hover:shadow-lg hover:shadow-black/5 
-                 transition-all cursor-default relative overflow-hidden"
+      transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.3, ease: "easeOut" }}
+      className={`group relative bg-bg-secondary border rounded-2xl p-4 
+                 hover:shadow-lg hover:shadow-black/20 transition-all duration-300
+                 ${isPartial ? 'border-border-subtle hover:border-amber-500/30' : 'border-border-subtle hover:border-accent-primary/30'}
+                 overflow-hidden`}
     >
-      <div className="flex gap-4">
-        <div className="shrink-0 relative">
-          {profile.profilePictureUrl ? (
-            <img 
-              src={profile.profilePictureUrl} 
-              alt={profile.fullName} 
-              className="w-14 h-14 rounded-full object-cover border-2 border-bg-tertiary group-hover:border-accent-primary/50 transition-colors"
-            />
-          ) : (
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-bg-tertiary to-bg-elevated 
-                          flex items-center justify-center text-text-secondary font-semibold text-lg
-                          border-2 border-bg-tertiary group-hover:border-accent-primary/50 transition-colors">
-              {profile.fullName.charAt(0)}
-            </div>
-          )}
-        </div>
+      <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none
+        bg-gradient-to-r ${isPartial ? 'from-amber-500/5 via-transparent to-transparent' : 'from-accent-primary/5 via-transparent to-transparent'}`} 
+      />
 
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-          <div className="flex items-center gap-2 mb-0.5">
-            <h3 className="font-semibold text-text-primary truncate hover:text-accent-primary transition-colors cursor-pointer"
-                onClick={() => window.open(`https://linkedin.com/in/${profile.publicIdentifier}`, '_blank')}>
-              {profile.fullName}
-            </h3>
-            {profile.location && (
-              <span className="flex items-center gap-1 text-xs text-text-muted shrink-0">
-                <MapPin className="w-3 h-3" />
-                {profile.location}
-              </span>
+      <div className="flex gap-4 relative z-10">
+        <div className="shrink-0">
+          <div className="relative">
+            {profile.profilePictureUrl ? (
+              <img 
+                src={profile.profilePictureUrl} 
+                alt={profile.fullName} 
+                className={`w-14 h-14 rounded-full object-cover border-2 transition-colors duration-300
+                  ${isPartial 
+                    ? 'border-border-subtle group-hover:border-amber-500/50' 
+                    : 'border-bg-tertiary group-hover:border-accent-primary/50'}`}
+              />
+            ) : (
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold border-2 transition-colors duration-300
+                ${isPartial
+                  ? 'bg-bg-tertiary text-text-muted border-border-subtle group-hover:border-amber-500/50'
+                  : 'bg-gradient-to-br from-bg-tertiary to-bg-elevated text-text-primary border-bg-tertiary group-hover:border-accent-primary/50'}`}
+              >
+                {profile.fullName.charAt(0)}
+              </div>
+            )}
+            
+            {isPartial && (
+              <div className="absolute -bottom-1 -right-1 bg-bg-primary rounded-full p-0.5 border border-border-subtle" title="Partial Profile">
+                <div className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center">
+                  <AlertCircle className="w-2.5 h-2.5" />
+                </div>
+              </div>
             )}
           </div>
+        </div>
+
+        <div className="flex-1 min-w-0 flex flex-col justify-center py-0.5">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="font-semibold text-text-primary truncate text-base group-hover:text-accent-primary transition-colors cursor-pointer"
+                  onClick={openLinkedIn}>
+                {profile.fullName}
+              </h3>
+              
+              {isPartial ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
+                  Sync Required
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200">
+              {isPartial && !syncQueued && (
+                <button
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
+                             bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-50"
+                >
+                  {isSyncing ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3" />
+                  )}
+                  <span>Sync</span>
+                </button>
+              )}
+              {syncQueued && (
+                <span className="text-xs text-green-500 px-2">Queued!</span>
+              )}
+              <button
+                onClick={openLinkedIn}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
+                           bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20"
+              >
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
           
-          <p className="text-sm text-text-secondary truncate mb-1">
-            {profile.headline}
-          </p>
-          
-          <div className="flex items-center gap-1.5 text-xs text-text-muted">
-            <Building2 className="w-3 h-3" />
-            <span className="truncate">{profile.currentTitle} at {profile.currentCompany}</span>
+          <div className="space-y-1">
+            {profile.headline ? (
+              <p className="text-sm text-text-secondary truncate pr-4" title={profile.headline}>
+                {profile.headline}
+              </p>
+            ) : (
+              <p className="text-sm text-text-muted/50 italic truncate">
+                No headline available
+              </p>
+            )}
+            
+            <div className="flex items-center gap-4 text-xs text-text-muted">
+              {(profile.currentTitle || profile.currentCompany) ? (
+                <div className="flex items-center gap-1.5 min-w-0 max-w-[50%]">
+                  <Briefcase className="w-3 h-3 shrink-0" />
+                  <span className="truncate">
+                    {profile.currentTitle}
+                    {profile.currentTitle && profile.currentCompany && " at "}
+                    {profile.currentCompany}
+                  </span>
+                </div>
+              ) : isPartial ? (
+                <span className="text-amber-500/70 text-[10px]">Visit profile to sync details</span>
+              ) : null}
+
+              {profile.location && (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <MapPin className="w-3 h-3" />
+                  <span className="truncate">{profile.location}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="w-64 shrink-0 flex flex-col gap-2 border-l border-border-subtle pl-4 ml-2">
+        <div className="w-60 shrink-0 flex flex-col justify-center gap-2 border-l border-border-subtle pl-4 ml-2 my-1">
           {profile.lastMessage ? (
-            <div className="text-xs">
+            <div className="text-xs group/msg">
               <div className="flex items-center gap-1.5 text-text-secondary mb-1">
                 <MessageSquare className="w-3 h-3 text-accent-primary" />
                 <span className="font-medium">Last Message</span>
                 <span className="text-text-muted ml-auto">{formatDate(profile.lastMessage.at)}</span>
               </div>
-              <div className="bg-bg-primary/50 rounded px-2 py-1.5 truncate text-text-muted flex items-center gap-2">
+              <div className="bg-bg-primary/50 rounded px-2 py-1.5 truncate text-text-muted flex items-center gap-2 border border-transparent group-hover/msg:border-border-subtle transition-colors">
                 {profile.lastMessage.direction === 'sent' ? (
                   <ArrowUpRight className="w-3 h-3 text-text-muted shrink-0" />
                 ) : (
@@ -168,14 +280,14 @@ function ProfileCard({ profile, index }: { profile: CRMProfile; index: number })
               </div>
             </div>
           ) : (
-            <div className="text-xs opacity-50 flex items-center gap-1.5 pt-1">
+            <div className="text-xs opacity-40 flex items-center gap-1.5 py-1">
               <MessageSquare className="w-3 h-3" />
               <span>No messages yet</span>
             </div>
           )}
 
           {profile.lastPost && (
-            <div className="text-xs">
+            <div className="text-xs mt-1">
               <div className="flex items-center gap-1.5 text-text-secondary mb-1">
                 <Calendar className="w-3 h-3 text-blue-400" />
                 <span className="font-medium">Last Post</span>

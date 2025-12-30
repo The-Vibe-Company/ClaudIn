@@ -13,6 +13,7 @@ import { chatRouter } from './routes/chat.js';
 import { statsRouter } from './routes/stats.js';
 import { syncRouter } from './routes/sync.js';
 import { settingsRouter } from './routes/settings.js';
+import { enrichRouter } from './routes/enrich.js';
 
 const app = new Hono();
 
@@ -45,6 +46,7 @@ app.route('/api/chat', chatRouter);
 app.route('/api/stats', statsRouter);
 app.route('/api/sync', syncRouter);
 app.route('/api/settings', settingsRouter);
+app.route('/api/enrich', enrichRouter);
 
 // Initialize database and start server
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3847;

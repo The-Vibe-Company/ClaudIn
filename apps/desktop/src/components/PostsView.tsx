@@ -14,6 +14,7 @@ import {
   Calendar,
   Maximize2
 } from 'lucide-react';
+import { open } from '@tauri-apps/plugin-shell';
 import { fetchPosts } from '../lib/api';
 import type { Post } from '../lib/api';
 
@@ -140,7 +141,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
             <div className="flex items-center justify-between">
               <h3 
                 className="font-bold text-text-primary hover:text-accent-primary transition-colors cursor-pointer truncate text-[15px]"
-                onClick={() => window.open(`https://linkedin.com/in/${post.authorPublicIdentifier}`, '_blank')}
+                onClick={() => open(`https://linkedin.com/in/${post.authorPublicIdentifier}`)}
               >
                 {post.authorName}
               </h3>
@@ -178,7 +179,7 @@ function PostCard({ post, index }: { post: Post; index: number }) {
                 relative overflow-hidden cursor-zoom-in group/image bg-bg-tertiary
                 ${post.imageUrls.length === 3 && i === 0 ? 'row-span-2' : ''}
               `}
-              onClick={() => window.open(url, '_blank')}
+              onClick={() => open(url)}
             >
               <img
                 src={url}
@@ -233,15 +234,13 @@ function PostCard({ post, index }: { post: Post; index: number }) {
             </div>
           )}
 
-          <a 
-            href={post.postUrl} 
-            target="_blank" 
-            rel="noopener noreferrer"
+          <button 
+            onClick={() => post.postUrl && open(post.postUrl)}
             className="text-xs text-text-muted hover:text-accent-primary flex items-center gap-1 transition-colors font-medium"
           >
             LinkedIn
             <ExternalLink className="w-3 h-3" />
-          </a>
+          </button>
         </div>
       </div>
     </motion.div>

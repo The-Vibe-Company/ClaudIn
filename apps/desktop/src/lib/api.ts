@@ -138,6 +138,7 @@ export interface CRMProfile {
   currentTitle: string;
   profilePictureUrl: string | null;
   location: string;
+  isPartial: boolean;
   lastMessage: { content: string; at: string; direction: 'sent' | 'received' } | null;
   lastPost: { content: string; at: string } | null;
 }
@@ -192,4 +193,71 @@ export async function fetchPosts(params: { search?: string; limit?: number; offs
   const res = await fetch(`${API_BASE}/profiles/posts/list?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch posts');
   return res.json() as Promise<PostsResponse>;
+}
+
+export async function queueProfileEnrichment(publicIdentifier: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/enrich/queue`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ publicIdentifier }),
+  });
+  if (!res.ok) throw new Error('Failed to queue enrichment');
+  return res.json();
+}
+
+export async function queueBulkEnrichment(identifiers: string[]): Promise<{ queued: number }> {
+  const res = await fetch(`${API_BASE}/enrich/queue/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifiers }),
+  });
+  if (!res.ok) throw new Error('Failed to queue enrichment');
+  return res.json();
+}
+
+export interface EnrichmentStatus {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  total: number;
+}
+
+export async function fetchEnrichmentStatus(): Promise<EnrichmentStatus> {
+  const res = await fetch(`${API_BASE}/enrich/status`);
+  if (!res.ok) throw new Error('Failed to fetch enrichment status');
+  return res.json();
+}
+
+export interface EnrichmentQueueItem {
+  id: number;
+  publicIdentifier: string;
+  url: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  queuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  attempts: number;
+  error: string | null;
+  profile: {
+    fullName: string;
+    headline: string | null;
+    profilePictureUrl: string | null;
+  } | null;
+}
+
+export async function fetchEnrichmentQueue(status?: string, limit?: number): Promise<{ items: EnrichmentQueueItem[] }> {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  if (limit) params.append('limit', String(limit));
+  
+  const res = await fetch(`${API_BASE}/enrich/queue/list?${params.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch enrichment queue');
+  return res.json();
+}
+
+export async function clearEnrichmentQueue(): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE}/enrich/queue`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to clear enrichment queue');
+  return res.json();
 }

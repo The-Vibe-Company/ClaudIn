@@ -555,4 +555,14 @@ contentObserver.observe(document.body, { childList: true, subtree: true });
 
 setTimeout(scrapeCurrentPage, 2000);
 
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === 'FORCE_SCRAPE') {
+    console.log('[ClaudIn] Force scrape requested');
+    scrapeCurrentPage().then(() => {
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+});
+
 console.log('[ClaudIn] Content script loaded');

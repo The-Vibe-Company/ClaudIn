@@ -157,6 +157,78 @@
       font-size: 11px;
       color: #666;
     }
+    
+    .queue-section {
+      background: #1a1a2e;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid #2a2a4a;
+    }
+    
+    .queue-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    
+    .queue-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #a0a0ff;
+    }
+    
+    .queue-badge {
+      background: #3b82f6;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    
+    .queue-stats {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .queue-stat {
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+      background: #252540;
+      border-radius: 6px;
+    }
+    
+    .queue-stat.processing {
+      background: #2a2a1a;
+    }
+    
+    .queue-stat.completed {
+      background: #1a2a1a;
+    }
+    
+    .queue-stat-value {
+      display: block;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+    
+    .queue-stat.processing .queue-stat-value {
+      color: #fbbf24;
+    }
+    
+    .queue-stat.completed .queue-stat-value {
+      color: #4ade80;
+    }
+    
+    .queue-stat-label {
+      font-size: 9px;
+      color: #888;
+      text-transform: uppercase;
+    }
   </style>
 </head>
 <body>
@@ -188,6 +260,27 @@
     <div class="status-dot"></div>
     <span>Auto-sync every 5 min</span>
     <span class="status-time" id="lastServerSync"></span>
+  </div>
+  
+  <div class="queue-section" id="queueSection" style="display: none;">
+    <div class="queue-header">
+      <span class="queue-title">Enrichment Queue</span>
+      <span class="queue-badge" id="queueBadge">0</span>
+    </div>
+    <div class="queue-stats">
+      <div class="queue-stat">
+        <span class="queue-stat-value" id="queuePending">0</span>
+        <span class="queue-stat-label">Pending</span>
+      </div>
+      <div class="queue-stat processing">
+        <span class="queue-stat-value" id="queueProcessing">0</span>
+        <span class="queue-stat-label">Processing</span>
+      </div>
+      <div class="queue-stat completed">
+        <span class="queue-stat-value" id="queueCompleted">0</span>
+        <span class="queue-stat-label">Done</span>
+      </div>
+    </div>
   </div>
   
   <button class="sync-btn" id="syncBtn">
