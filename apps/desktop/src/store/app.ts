@@ -5,16 +5,22 @@ interface ConversationWithMessages extends ChatConversation {
   messages: ChatMessage[];
 }
 
+type AppView = 'chat' | 'crm' | 'posts' | 'profile';
+
 interface AppState {
   // UI State
-  activeView: 'chat' | 'crm' | 'posts';
-  setActiveView: (view: 'chat' | 'crm' | 'posts') => void;
+  activeView: AppView;
+  setActiveView: (view: AppView) => void;
   isCommandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
   
   isSettingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  
+  selectedProfileId: string | null;
+  openProfile: (id: string) => void;
+  closeProfile: () => void;
 
   // Conversations
   conversations: ConversationWithMessages[];
@@ -45,6 +51,10 @@ export const useAppStore = create<AppState>((set) => ({
   
   isSettingsOpen: false,
   setSettingsOpen: (open) => set({ isSettingsOpen: open }),
+  
+  selectedProfileId: null,
+  openProfile: (id) => set({ selectedProfileId: id, activeView: 'profile' }),
+  closeProfile: () => set({ selectedProfileId: null, activeView: 'crm' }),
 
   // Conversations
   conversations: [],

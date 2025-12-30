@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
 import { fetchCRMProfiles, queueProfileEnrichment } from '../lib/api';
+import { useAppStore } from '../store/app';
 import type { CRMProfile } from '../lib/api';
 
 export function CRMView() {
@@ -108,6 +109,7 @@ export function CRMView() {
 }
 
 function ProfileCard({ profile, index }: { profile: CRMProfile; index: number }) {
+  const { openProfile } = useAppStore();
   const isPartial = profile.isPartial;
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncQueued, setSyncQueued] = useState(false);
@@ -137,12 +139,17 @@ function ProfileCard({ profile, index }: { profile: CRMProfile; index: number })
     }
   };
 
+  const handleCardClick = () => {
+    openProfile(profile.publicIdentifier);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index * 0.05, 0.5), duration: 0.3, ease: "easeOut" }}
-      className={`group relative bg-bg-secondary border rounded-2xl p-4 
+      onClick={handleCardClick}
+      className={`group relative bg-bg-secondary border rounded-2xl p-4 cursor-pointer
                  hover:shadow-lg hover:shadow-black/20 transition-all duration-300
                  ${isPartial ? 'border-border-subtle hover:border-amber-500/30' : 'border-border-subtle hover:border-accent-primary/30'}
                  overflow-hidden`}
@@ -186,8 +193,7 @@ function ProfileCard({ profile, index }: { profile: CRMProfile; index: number })
         <div className="flex-1 min-w-0 flex flex-col justify-center py-0.5">
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-2 min-w-0">
-              <h3 className="font-semibold text-text-primary truncate text-base group-hover:text-accent-primary transition-colors cursor-pointer"
-                  onClick={openLinkedIn}>
+              <h3 className="font-semibold text-text-primary truncate text-base group-hover:text-accent-primary transition-colors">
                 {profile.fullName}
               </h3>
               

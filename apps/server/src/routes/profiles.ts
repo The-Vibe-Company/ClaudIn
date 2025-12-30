@@ -5,7 +5,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import { searchProfiles, getProfileById, getProfileByUrl, upsertProfile } from '../db/profiles.js';
+import { searchProfiles, getProfileById, getProfileByUrl, getProfileByPublicIdentifier, upsertProfile } from '../db/profiles.js';
 import { getDb } from '../db/index.js';
 
 export const profilesRouter = new Hono();
@@ -53,6 +53,81 @@ profilesRouter.get('/:id', (c) => {
   }
   
   return c.json({ profile, source: 'cache' });
+});
+
+profilesRouter.get('/:id/detail', (c) => {
+  const id = c.req.param('id');
+  const db = getDb();
+  
+  let profile = getProfileById(id);
+  if (!profile) {
+    profile = getProfileByPublicIdentifier(id);
+  }
+  if (!profile) {
+    profile = getProfileByUrl(id);
+  }
+  
+  if (!profile) {
+    return c.json({ error: 'Profile not found' }, 404);
+  }
+  
+  const posts = db.prepare(`
+    SELECT * FROM posts 
+    WHERE author_public_identifier = ?
+    ORDER BY posted_at DESC
+    LIMIT 20
+  `).all(profile.publicIdentifier) as Array<{
+    id: string;
+    content: string;
+    post_url: string;
+    likes_count: number;
+    comments_count: number;
+    reposts_count: number;
+    has_image: number;
+    has_video: number;
+    has_document: number;
+    image_urls: string;
+    posted_at: string;
+  }>;
+  
+  const messages = db.prepare(`
+    SELECT * FROM messages 
+    WHERE profile_id = ?
+    ORDER BY sent_at DESC
+    LIMIT 50
+  `).all(profile.id) as Array<{
+    id: string;
+    conversation_id: string;
+    direction: 'sent' | 'received';
+    content: string;
+    sent_at: string;
+  }>;
+  
+  return c.json({
+    profile,
+    posts: posts.map(p => ({
+      id: p.id,
+      content: p.content,
+      postUrl: p.post_url,
+      likesCount: p.likes_count,
+      commentsCount: p.comments_count,
+      repostsCount: p.reposts_count,
+      hasImage: !!p.has_image,
+      hasVideo: !!p.has_video,
+      hasDocument: !!p.has_document,
+      imageUrls: JSON.parse(p.image_urls || '[]').filter(
+        (url: string) => !url.includes('profile-displayphoto') && !url.includes('company-logo')
+      ),
+      postedAt: p.posted_at,
+    })),
+    messages: messages.map(m => ({
+      id: m.id,
+      conversationId: m.conversation_id,
+      direction: m.direction,
+      content: m.content,
+      sentAt: m.sent_at,
+    })),
+  });
 });
 
 // Upsert profile (used by sync)

@@ -111,6 +111,12 @@ export function getProfileByUrl(url: string): LinkedInProfile | null {
   return row ? rowToProfile(row) : null;
 }
 
+export function getProfileByPublicIdentifier(publicIdentifier: string): LinkedInProfile | null {
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM profiles WHERE public_identifier = ?').get(publicIdentifier) as DbProfile | undefined;
+  return row ? rowToProfile(row) : null;
+}
+
 export function searchProfiles(query: string, filters?: SearchFilters, limit = 50, offset = 0): { profiles: LinkedInProfile[], total: number } {
   const db = getDb();
   

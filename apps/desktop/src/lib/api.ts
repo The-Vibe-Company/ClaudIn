@@ -261,3 +261,71 @@ export async function clearEnrichmentQueue(): Promise<{ success: boolean }> {
   if (!res.ok) throw new Error('Failed to clear enrichment queue');
   return res.json();
 }
+
+export interface ProfilePost {
+  id: string;
+  content: string;
+  postUrl: string;
+  likesCount: number;
+  commentsCount: number;
+  repostsCount: number;
+  hasImage: boolean;
+  hasVideo: boolean;
+  hasDocument: boolean;
+  imageUrls: string[];
+  postedAt: string;
+}
+
+export interface ProfileMessage {
+  id: string;
+  conversationId: string;
+  direction: 'sent' | 'received';
+  content: string;
+  sentAt: string;
+}
+
+export interface ProfileDetail {
+  id: string;
+  linkedinUrl: string;
+  publicIdentifier: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  headline: string;
+  location: string | null;
+  about: string | null;
+  profilePictureUrl: string | null;
+  currentCompany: string | null;
+  currentTitle: string | null;
+  connectionDegree: 1 | 2 | 3 | null;
+  connectedAt: string | null;
+  experience: Array<{
+    title: string;
+    company: string;
+    location?: string;
+    startDate?: string;
+    endDate?: string;
+    description?: string;
+  }> | null;
+  education: Array<{
+    school: string;
+    degree?: string;
+    field?: string;
+    startYear?: number;
+    endYear?: number;
+  }> | null;
+  skills: string[] | null;
+  isPartial: boolean;
+}
+
+export interface ProfileDetailResponse {
+  profile: ProfileDetail;
+  posts: ProfilePost[];
+  messages: ProfileMessage[];
+}
+
+export async function fetchProfileDetail(id: string): Promise<ProfileDetailResponse> {
+  const res = await fetch(`${API_BASE}/profiles/${id}/detail`);
+  if (!res.ok) throw new Error('Failed to fetch profile detail');
+  return res.json();
+}
