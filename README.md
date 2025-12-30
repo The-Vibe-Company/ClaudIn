@@ -1,23 +1,26 @@
 # ClaudIn
 
-**Chattez avec votre réseau LinkedIn grâce à l'IA**
+**Synchronisez LinkedIn et exposez vos données via MCP**
 
-ClaudIn est une application desktop local-first qui vous permet d'analyser et d'interagir avec votre réseau LinkedIn via une interface de chat IA. Vos données restent sur votre machine - aucune donnée n'est envoyée vers des serveurs externes.
+ClaudIn synchronise votre réseau LinkedIn localement et l'expose via un serveur [MCP (Model Context Protocol)](https://modelcontextprotocol.io). Utilisez vos données LinkedIn directement depuis Claude Desktop, Claude Code, ou tout client MCP compatible.
+
+## Pourquoi ClaudIn ?
+
+- **Vos données, localement** - Tout est stocké sur votre machine dans une base SQLite
+- **MCP-first** - Accédez à votre réseau LinkedIn depuis n'importe quel client MCP
+- **Sync automatique** - L'extension Chrome synchronise vos contacts, messages et posts en arrière-plan
 
 ## Fonctionnalités
 
-- **Chat IA** - Posez des questions sur votre réseau à Claude (via OpenRouter)
-- **CRM** - Visualisez et recherchez tous vos contacts LinkedIn
-- **Posts** - Parcourez les publications de votre réseau
-- **Sync automatique** - Extension Chrome qui synchronise automatiquement vos données LinkedIn
-- **Serveur MCP** - Intégration avec Claude Desktop et autres clients compatibles
+- **Serveur MCP** - Expose votre réseau LinkedIn à Claude Desktop/Code et autres clients
+- **Extension Chrome** - Synchronise automatiquement profils, messages et publications
+- **Interface desktop** - CRM pour visualiser vos contacts et leurs activités
 
 ## Prérequis
 
 - Node.js v22+
 - pnpm 9.15+
 - Rust (pour Tauri)
-- Une clé API [OpenRouter](https://openrouter.ai) pour le chat IA
 
 ## Installation
 
@@ -72,14 +75,7 @@ pnpm build:extension
 
 ## Configuration
 
-### 1. Clé API OpenRouter
-
-1. Obtenez une clé API sur [openrouter.ai](https://openrouter.ai)
-2. Ouvrez l'application desktop
-3. Allez dans **Settings** (icône engrenage)
-4. Entrez votre clé API OpenRouter
-
-### 2. Extension Chrome
+### 1. Extension Chrome
 
 1. Ouvrez Chrome et allez sur `chrome://extensions`
 2. Activez le **Mode développeur**
@@ -87,6 +83,28 @@ pnpm build:extension
 4. Sélectionnez le dossier `apps/extension/dist`
 
 L'extension synchronise automatiquement les données lorsque vous naviguez sur LinkedIn.
+
+### 2. Serveur MCP avec Claude Desktop
+
+Ajoutez cette configuration dans votre fichier Claude Desktop (`claude_desktop_config.json`) :
+
+```json
+{
+  "mcpServers": {
+    "claudin": {
+      "command": "node",
+      "args": ["/chemin/vers/ClaudIn/packages/mcp-server/dist/index.js"]
+    }
+  }
+}
+```
+
+Une fois configuré, Claude Desktop peut accéder à votre réseau LinkedIn via les outils MCP :
+- `search_network` - Rechercher des contacts
+- `get_profile_details` - Voir le détail d'un profil
+- `get_profile_posts` - Voir les publications d'un contact
+- `find_people_at_company` - Trouver des contacts dans une entreprise
+- `get_network_stats` - Statistiques de votre réseau
 
 ## Structure du projet
 
@@ -105,10 +123,10 @@ ClaudIn/
 
 | Composant | Stack |
 |-----------|-------|
-| Desktop | React 19, Tauri 2, Tailwind CSS, Zustand |
+| MCP Server | @modelcontextprotocol/sdk, SQLite |
 | Backend | Hono, SQLite, Zod |
 | Extension | Chrome Manifest V3, Vite |
-| IA | Claude Sonnet via OpenRouter |
+| Desktop | React 19, Tauri 2, Tailwind CSS |
 
 ## Données
 
