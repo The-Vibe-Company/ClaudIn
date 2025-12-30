@@ -128,3 +128,33 @@ export async function updateSettings(settings: { openrouter_api_key?: string }):
   });
   if (!res.ok) throw new Error('Failed to update settings');
 }
+
+export interface CRMProfile {
+  id: string;
+  publicIdentifier: string;
+  fullName: string;
+  headline: string;
+  currentCompany: string;
+  currentTitle: string;
+  profilePictureUrl: string | null;
+  location: string;
+  lastMessage: { content: string; at: string; direction: 'sent' | 'received' } | null;
+  lastPost: { content: string; at: string } | null;
+}
+
+export interface CRMResponse {
+  profiles: CRMProfile[];
+  total: number;
+  hasMore: boolean;
+}
+
+export async function fetchCRMProfiles(params: { search?: string; limit?: number; offset?: number } = {}) {
+  const query = new URLSearchParams();
+  if (params.search) query.append('search', params.search);
+  if (params.limit) query.append('limit', String(params.limit));
+  if (params.offset) query.append('offset', String(params.offset));
+
+  const res = await fetch(`${API_BASE}/profiles/crm/list?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch CRM profiles');
+  return res.json() as Promise<CRMResponse>;
+}

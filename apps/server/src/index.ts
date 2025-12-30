@@ -19,7 +19,14 @@ const app = new Hono();
 // Middleware
 app.use('*', logger());
 app.use('*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:1420', 'tauri://localhost'],
+  origin: (origin) => {
+    // Allow localhost dev servers and Tauri
+    const allowedOrigins = ['http://localhost:5173', 'http://localhost:1420', 'tauri://localhost'];
+    if (allowedOrigins.includes(origin)) return origin;
+    // Allow any Chrome extension
+    if (origin?.startsWith('chrome-extension://')) return origin;
+    return null;
+  },
   credentials: true,
 }));
 

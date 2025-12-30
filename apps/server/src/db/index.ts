@@ -5,7 +5,7 @@
 
 import Database from 'better-sqlite3';
 import { existsSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { homedir } from 'os';
 
 // Store DB in user's data directory
@@ -127,12 +127,42 @@ export function initDatabase(): Database.Database {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Posts table (LinkedIn feed)
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY,
+      author_profile_id TEXT REFERENCES profiles(id),
+      author_public_identifier TEXT NOT NULL,
+      author_name TEXT,
+      author_headline TEXT,
+      author_profile_picture_url TEXT,
+      
+      content TEXT,
+      post_url TEXT,
+      
+      likes_count INTEGER DEFAULT 0,
+      comments_count INTEGER DEFAULT 0,
+      reposts_count INTEGER DEFAULT 0,
+      
+      has_image INTEGER DEFAULT 0,
+      has_video INTEGER DEFAULT 0,
+      has_document INTEGER DEFAULT 0,
+      image_urls TEXT,
+      
+      posted_at TEXT,
+      scraped_at TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- Indexes
     CREATE INDEX IF NOT EXISTS idx_profiles_company ON profiles(current_company);
     CREATE INDEX IF NOT EXISTS idx_profiles_title ON profiles(current_title);
     CREATE INDEX IF NOT EXISTS idx_profiles_scraped ON profiles(scraped_at);
     CREATE INDEX IF NOT EXISTS idx_profiles_name ON profiles(full_name);
     CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_profile ON messages(profile_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_sent ON messages(sent_at);
+    CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author_public_identifier);
+    CREATE INDEX IF NOT EXISTS idx_posts_posted ON posts(posted_at);
   `);
 
   console.log('Database initialized');

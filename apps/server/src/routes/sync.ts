@@ -4,9 +4,9 @@
  */
 
 import { Hono } from 'hono';
-import { getDb, generateId } from '../db/index.js';
+import { getDb } from '../db/index.js';
 import { upsertProfile } from '../db/profiles.js';
-import type { LinkedInProfile } from '@claudin/shared';
+import type { LinkedInProfile, LinkedInMessage, LinkedInPost } from '@claudin/shared';
 
 export const syncRouter = new Hono();
 
@@ -68,7 +68,6 @@ syncRouter.post('/full', async (c) => {
   const db = getDb();
   
   for (const profile of profiles) {
-    // Check if exists
     const existing = db.prepare(
       'SELECT id FROM profiles WHERE public_identifier = ?'
     ).get(profile.publicIdentifier);
@@ -80,7 +79,6 @@ syncRouter.post('/full', async (c) => {
     }
   }
   
-  // Log sync
   db.prepare(`
     INSERT INTO sync_log (type, count, synced_at)
     VALUES (?, ?, ?)
@@ -92,4 +90,107 @@ syncRouter.post('/full', async (c) => {
     updated,
     total: profiles.length,
   });
+});
+
+syncRouter.post('/messages', async (c) => {
+  const { messages } = await c.req.json() as { messages: LinkedInMessage[] };
+  
+  if (!Array.isArray(messages)) {
+    return c.json({ error: 'messages must be an array' }, 400);
+  }
+  
+  const db = getDb();
+  let saved = 0;
+  
+  const upsertStmt = db.prepare(`
+    INSERT INTO messages (id, conversation_id, profile_id, direction, content, sent_at, is_read, scraped_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      content = excluded.content,
+      is_read = excluded.is_read,
+      scraped_at = excluded.scraped_at
+  `);
+  
+  for (const msg of messages) {
+    try {
+      upsertStmt.run(
+        msg.id,
+        msg.conversationId,
+        msg.profileId,
+        msg.direction,
+        msg.content,
+        msg.sentAt,
+        msg.isRead ? 1 : 0,
+        msg.scrapedAt
+      );
+      saved++;
+    } catch (e) {
+      console.error('Failed to save message:', e);
+    }
+  }
+  
+  db.prepare(`
+    INSERT INTO sync_log (type, count, synced_at)
+    VALUES (?, ?, ?)
+  `).run('messages', saved, new Date().toISOString());
+  
+  return c.json({ success: true, saved, total: messages.length });
+});
+
+syncRouter.post('/posts', async (c) => {
+  const { posts } = await c.req.json() as { posts: LinkedInPost[] };
+  
+  if (!Array.isArray(posts)) {
+    return c.json({ error: 'posts must be an array' }, 400);
+  }
+  
+  const db = getDb();
+  let saved = 0;
+  
+  const upsertStmt = db.prepare(`
+    INSERT INTO posts (id, author_profile_id, author_public_identifier, author_name, author_headline, 
+      author_profile_picture_url, content, post_url, likes_count, comments_count, reposts_count,
+      has_image, has_video, has_document, image_urls, posted_at, scraped_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      content = excluded.content,
+      likes_count = excluded.likes_count,
+      comments_count = excluded.comments_count,
+      reposts_count = excluded.reposts_count,
+      scraped_at = excluded.scraped_at
+  `);
+  
+  for (const post of posts) {
+    try {
+      upsertStmt.run(
+        post.id,
+        post.authorProfileId || null,
+        post.authorPublicIdentifier,
+        post.authorName,
+        post.authorHeadline,
+        post.authorProfilePictureUrl,
+        post.content,
+        post.postUrl,
+        post.likesCount,
+        post.commentsCount,
+        post.repostsCount,
+        post.hasImage ? 1 : 0,
+        post.hasVideo ? 1 : 0,
+        post.hasDocument ? 1 : 0,
+        JSON.stringify(post.imageUrls),
+        post.postedAt,
+        post.scrapedAt
+      );
+      saved++;
+    } catch (e) {
+      console.error('Failed to save post:', e);
+    }
+  }
+  
+  db.prepare(`
+    INSERT INTO sync_log (type, count, synced_at)
+    VALUES (?, ?, ?)
+  `).run('posts', saved, new Date().toISOString());
+  
+  return c.json({ success: true, saved, total: posts.length });
 });

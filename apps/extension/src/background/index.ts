@@ -5,33 +5,61 @@
 
 import type { 
   LinkedInProfile, 
+  LinkedInMessage,
+  LinkedInPost,
   ProfileScrapeEvent, 
   SearchScrapeEvent,
   ScrapeEvent 
 } from '@claudin/shared';
 
+interface MessagesScrapeEvent extends ScrapeEvent {
+  type: 'messages';
+  data: { messages: LinkedInMessage[] };
+}
+
+interface FeedScrapeEvent extends ScrapeEvent {
+  type: 'feed';
+  data: { posts: LinkedInPost[] };
+}
+
 const STORAGE_KEYS = {
   PROFILES: 'claudin_profiles',
+  MESSAGES: 'claudin_messages',
+  POSTS: 'claudin_posts',
   STATS: 'claudin_stats',
 } as const;
 
 const SERVER_URL = 'http://localhost:3847/api';
 
-// In-memory cache for quick access
 const profilesCache = new Map<string, LinkedInProfile>();
+const messagesCache = new Map<string, LinkedInMessage>();
+const postsCache = new Map<string, LinkedInPost>();
 
-// Initialize from storage
 async function initializeCache() {
-  const data = await chrome.storage.local.get(STORAGE_KEYS.PROFILES);
-  const profiles = data[STORAGE_KEYS.PROFILES] as Record<string, LinkedInProfile> | undefined;
+  const data = await chrome.storage.local.get([STORAGE_KEYS.PROFILES, STORAGE_KEYS.MESSAGES, STORAGE_KEYS.POSTS]);
   
+  const profiles = data[STORAGE_KEYS.PROFILES] as Record<string, LinkedInProfile> | undefined;
   if (profiles) {
     Object.entries(profiles).forEach(([key, profile]) => {
       profilesCache.set(key, profile);
     });
   }
   
-  console.log(`[ClaudIn] Initialized with ${profilesCache.size} cached profiles`);
+  const messages = data[STORAGE_KEYS.MESSAGES] as Record<string, LinkedInMessage> | undefined;
+  if (messages) {
+    Object.entries(messages).forEach(([key, msg]) => {
+      messagesCache.set(key, msg);
+    });
+  }
+  
+  const posts = data[STORAGE_KEYS.POSTS] as Record<string, LinkedInPost> | undefined;
+  if (posts) {
+    Object.entries(posts).forEach(([key, post]) => {
+      postsCache.set(key, post);
+    });
+  }
+  
+  console.log(`[ClaudIn] Initialized with ${profilesCache.size} profiles, ${messagesCache.size} messages, ${postsCache.size} posts`);
 }
 
 // Save profile to storage
@@ -75,22 +103,47 @@ async function saveProfile(profile: Partial<LinkedInProfile>) {
   return merged;
 }
 
-// Update stats
 async function updateStats() {
   const stats = {
     totalProfiles: profilesCache.size,
+    totalMessages: messagesCache.size,
+    totalPosts: postsCache.size,
     lastSyncAt: new Date().toISOString(),
   };
   
   await chrome.storage.local.set({ [STORAGE_KEYS.STATS]: stats });
   
-  // Update badge
   chrome.action.setBadgeText({ text: stats.totalProfiles.toString() });
-  chrome.action.setBadgeBackgroundColor({ color: '#0A66C2' }); // LinkedIn blue
+  chrome.action.setBadgeBackgroundColor({ color: '#0A66C2' });
 }
 
-// Handle messages from content scripts
-chrome.runtime.onMessage.addListener((message: ScrapeEvent, _sender, _sendResponse) => {
+async function saveMessage(message: LinkedInMessage) {
+  messagesCache.set(message.id, message);
+  
+  const allMessages: Record<string, LinkedInMessage> = {};
+  messagesCache.forEach((m, k) => {
+    allMessages[k] = m;
+  });
+  
+  await chrome.storage.local.set({ [STORAGE_KEYS.MESSAGES]: allMessages });
+  await updateStats();
+  return message;
+}
+
+async function savePost(post: LinkedInPost) {
+  postsCache.set(post.id, post);
+  
+  const allPosts: Record<string, LinkedInPost> = {};
+  postsCache.forEach((p, k) => {
+    allPosts[k] = p;
+  });
+  
+  await chrome.storage.local.set({ [STORAGE_KEYS.POSTS]: allPosts });
+  await updateStats();
+  return post;
+}
+
+chrome.runtime.onMessage.addListener((message: ScrapeEvent | MessagesScrapeEvent | FeedScrapeEvent, _sender, _sendResponse) => {
   console.log('[ClaudIn] Received message:', message.type);
   
   switch (message.type) {
@@ -106,15 +159,34 @@ chrome.runtime.onMessage.addListener((message: ScrapeEvent, _sender, _sendRespon
       const event = message as SearchScrapeEvent;
       const { results } = event.data;
       
-      // Save all profiles from search results
       Promise.all(results.map(saveProfile)).then(() => {
         console.log(`[ClaudIn] Saved ${results.length} profiles from search`);
       });
       break;
     }
+    
+    case 'messages': {
+      const event = message as MessagesScrapeEvent;
+      const { messages } = event.data;
+      
+      Promise.all(messages.map(saveMessage)).then(() => {
+        console.log(`[ClaudIn] Saved ${messages.length} messages`);
+      });
+      break;
+    }
+    
+    case 'feed': {
+      const event = message as FeedScrapeEvent;
+      const { posts } = event.data;
+      
+      Promise.all(posts.map(savePost)).then(() => {
+        console.log(`[ClaudIn] Saved ${posts.length} posts`);
+      });
+      break;
+    }
   }
   
-  return true; // Keep channel open for async response
+  return true;
 });
 
 // Handle messages from external sources (e.g., desktop app via native messaging)
@@ -160,36 +232,65 @@ chrome.runtime.onStartup.addListener(() => {
   initializeCache();
 });
 
-async function syncToServer(): Promise<{ success: boolean; saved?: number; error?: string }> {
+async function syncToServer(): Promise<{ success: boolean; profiles?: number; messages?: number; posts?: number; error?: string }> {
   try {
     const profiles = Array.from(profilesCache.values());
+    const messages = Array.from(messagesCache.values());
+    const posts = Array.from(postsCache.values());
     
-    if (profiles.length === 0) {
-      return { success: true, saved: 0 };
+    let profilesSaved = 0;
+    let messagesSaved = 0;
+    let postsSaved = 0;
+    
+    if (profiles.length > 0) {
+      const res = await fetch(`${SERVER_URL}/sync/profiles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profiles }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        profilesSaved = result.saved;
+      }
     }
     
-    const response = await fetch(`${SERVER_URL}/sync/profiles`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profiles }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Server error: ${response.status}`);
+    if (messages.length > 0) {
+      const res = await fetch(`${SERVER_URL}/sync/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        messagesSaved = result.saved;
+      }
     }
     
-    const result = await response.json();
-    console.log(`[ClaudIn] Synced ${result.saved} profiles to server`);
+    if (posts.length > 0) {
+      const res = await fetch(`${SERVER_URL}/sync/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posts }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        postsSaved = result.saved;
+      }
+    }
+    
+    console.log(`[ClaudIn] Synced ${profilesSaved} profiles, ${messagesSaved} messages, ${postsSaved} posts`);
     
     await chrome.storage.local.set({
       [STORAGE_KEYS.STATS]: {
         totalProfiles: profilesCache.size,
+        totalMessages: messagesCache.size,
+        totalPosts: postsCache.size,
         lastSyncAt: new Date().toISOString(),
         lastServerSync: new Date().toISOString(),
       }
     });
     
-    return { success: true, saved: result.saved };
+    return { success: true, profiles: profilesSaved, messages: messagesSaved, posts: postsSaved };
   } catch (error) {
     console.error('[ClaudIn] Sync failed:', error);
     return { success: false, error: String(error) };

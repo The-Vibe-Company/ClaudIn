@@ -1,17 +1,23 @@
 async function updateStats() {
-  const data = await chrome.storage.local.get(['claudin_profiles', 'claudin_stats']);
+  const data = await chrome.storage.local.get(['claudin_profiles', 'claudin_messages', 'claudin_posts', 'claudin_stats']);
   
   const profiles = data.claudin_profiles as Record<string, unknown> | undefined;
+  const messages = data.claudin_messages as Record<string, unknown> | undefined;
+  const posts = data.claudin_posts as Record<string, unknown> | undefined;
   const stats = data.claudin_stats as { lastSyncAt?: string } | undefined;
   
   const profileCount = profiles ? Object.keys(profiles).length : 0;
+  const messageCount = messages ? Object.keys(messages).length : 0;
+  const postCount = posts ? Object.keys(posts).length : 0;
   
   const profileCountEl = document.getElementById('profileCount');
+  const messageCountEl = document.getElementById('messageCount');
+  const postCountEl = document.getElementById('postCount');
   const lastSyncEl = document.getElementById('lastSync');
   
-  if (profileCountEl) {
-    profileCountEl.textContent = profileCount.toString();
-  }
+  if (profileCountEl) profileCountEl.textContent = profileCount.toString();
+  if (messageCountEl) messageCountEl.textContent = messageCount.toString();
+  if (postCountEl) postCountEl.textContent = postCount.toString();
   
   if (lastSyncEl && stats?.lastSyncAt) {
     lastSyncEl.textContent = formatTimeAgo(stats.lastSyncAt);
@@ -49,7 +55,11 @@ async function syncToServer() {
     const response = await chrome.runtime.sendMessage({ type: 'SYNC_TO_SERVER' });
     
     if (response.success) {
-      syncResult.textContent = `Synced ${response.saved || 0} profiles to desktop app`;
+      const parts = [];
+      if (response.profiles) parts.push(`${response.profiles} profiles`);
+      if (response.messages) parts.push(`${response.messages} messages`);
+      if (response.posts) parts.push(`${response.posts} posts`);
+      syncResult.textContent = parts.length ? `Synced ${parts.join(', ')}` : 'Nothing to sync';
       syncResult.className = 'sync-result success';
     } else {
       syncResult.textContent = `Sync failed: ${response.error || 'Unknown error'}`;
@@ -73,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 chrome.storage.onChanged.addListener((changes) => {
-  if (changes.claudin_profiles || changes.claudin_stats) {
+  if (changes.claudin_profiles || changes.claudin_messages || changes.claudin_posts || changes.claudin_stats) {
     updateStats();
   }
 });

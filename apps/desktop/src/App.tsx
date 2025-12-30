@@ -1,13 +1,14 @@
 import { useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
+import { CRMView } from './components/CRMView';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { useAppStore } from './store/app';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 export default function App() {
-  const { isCommandPaletteOpen, setCommandPaletteOpen } = useAppStore();
+  const { isCommandPaletteOpen, setCommandPaletteOpen, activeView } = useAppStore();
 
   // Initialize keyboard shortcuts
   useKeyboardShortcuts();
@@ -27,15 +28,12 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg-primary">
-      {/* Sidebar */}
       <Sidebar />
 
-      {/* Main Chat Area */}
       <main className="flex-1 flex flex-col min-w-0">
-        <ChatView />
+        {activeView === 'chat' ? <ChatView /> : <CRMView />}
       </main>
 
-      {/* Command Palette */}
       <CommandPalette
         open={isCommandPaletteOpen}
         onOpenChange={setCommandPaletteOpen}

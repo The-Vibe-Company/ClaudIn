@@ -86,6 +86,36 @@ export interface LinkedInConversation {
 }
 
 /**
+ * LinkedIn Post Types (Feed)
+ */
+
+export interface LinkedInPost {
+  id: string;
+  authorProfileId: string; // FK to profile (the person who posted)
+  authorPublicIdentifier: string;
+  authorName: string;
+  authorHeadline: string | null;
+  authorProfilePictureUrl: string | null;
+  
+  content: string;
+  postUrl: string | null;
+  
+  // Engagement
+  likesCount: number;
+  commentsCount: number;
+  repostsCount: number;
+  
+  // Media
+  hasImage: boolean;
+  hasVideo: boolean;
+  hasDocument: boolean;
+  imageUrls: string[];
+  
+  postedAt: string; // ISO date (approximated from "2h ago" etc)
+  scrapedAt: string;
+}
+
+/**
  * Search Types
  */
 

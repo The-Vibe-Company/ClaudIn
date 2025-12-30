@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { getDb, generateId } from '../db/index.js';
-import { searchProfiles, getProfileById } from '../db/profiles.js';
+
 import { runAgent } from '../agents/linkedin-agent.js';
 import type { ChatMessage, ChatConversation } from '@claudin/shared';
 

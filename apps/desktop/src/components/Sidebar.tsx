@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, Plus, Settings, Sparkles } from 'lucide-react';
+import { MessageSquare, Plus, Settings, Sparkles, Users } from 'lucide-react';
 import { useAppStore } from '../store/app';
 import { fetchConversations } from '../lib/api';
 import type { ChatConversation } from '@claudin/shared';
@@ -13,6 +13,8 @@ export function Sidebar() {
     activeConversationId,
     setActiveConversation,
     setSettingsOpen,
+    activeView,
+    setActiveView,
   } = useAppStore();
 
   const { data } = useQuery({
@@ -33,11 +35,16 @@ export function Sidebar() {
 
   const handleNewChat = () => {
     setActiveConversation(null);
+    setActiveView('chat');
+  };
+
+  const handleSelectConversation = (id: string) => {
+    setActiveConversation(id);
+    setActiveView('chat');
   };
 
   return (
     <aside className="w-64 bg-bg-secondary border-r border-border-subtle flex flex-col">
-      {/* Header */}
       <div className="h-12 flex items-center px-4 border-b border-border-subtle drag-region">
         <div className="flex items-center gap-2 no-drag">
           <Sparkles className="w-5 h-5 text-accent-primary" />
@@ -45,7 +52,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* New Chat Button */}
       <div className="p-3">
         <button
           onClick={handleNewChat}
@@ -58,7 +64,6 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Conversations List */}
       <div className="flex-1 overflow-y-auto scrollbar-hidden px-2">
         <AnimatePresence>
           {conversations.map((conversation) => (
@@ -67,12 +72,12 @@ export function Sidebar() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              onClick={() => setActiveConversation(conversation.id)}
+              onClick={() => handleSelectConversation(conversation.id)}
               className={`
                 w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm
                 transition-colors mb-1
                 ${
-                  activeConversationId === conversation.id
+                  activeView === 'chat' && activeConversationId === conversation.id
                     ? 'bg-bg-elevated text-text-primary'
                     : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
                 }
@@ -96,8 +101,22 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* Footer */}
-      <div className="p-3 border-t border-border-subtle">
+      <div className="p-3 border-t border-border-subtle space-y-1">
+        <button
+          onClick={() => setActiveView('crm')}
+          className={`
+            w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors
+            ${
+              activeView === 'crm'
+                ? 'bg-bg-elevated text-text-primary'
+                : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+            }
+          `}
+        >
+          <Users className="w-4 h-4" />
+          Network CRM
+        </button>
+
         <button
           onClick={() => setSettingsOpen(true)}
           className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-text-secondary
