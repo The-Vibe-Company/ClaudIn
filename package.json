@@ -1,0 +1,27 @@
+{
+  "name": "claudin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chat with your LinkedIn network - AI-powered local-first app",
+  "author": "Stan",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.1",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "clean": "turbo clean && rm -rf node_modules",
+    "dev:server": "pnpm --filter @claudin/server dev",
+    "dev:desktop": "pnpm --filter @claudin/desktop dev",
+    "dev:extension": "pnpm --filter @claudin/extension dev",
+    "build:extension": "pnpm --filter @claudin/extension build"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

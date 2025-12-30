@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border-subtle;
+  }
+  
+  html {
+    @apply bg-bg-primary text-text-primary antialiased;
+    font-feature-settings: 'ss01' on, 'ss02' on, 'cv01' on;
+  }
+  
+  body {
+    @apply min-h-screen;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border-default rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-text-muted;
+  }
+  
+  /* Hide scrollbar until hover */
+  .scrollbar-hidden::-webkit-scrollbar-thumb {
+    @apply bg-transparent;
+  }
+  
+  .scrollbar-hidden:hover::-webkit-scrollbar-thumb {
+    @apply bg-border-default;
+  }
+  
+  /* Selection */
+  ::selection {
+    @apply bg-accent-primary/30;
+  }
+}
+
+@layer components {
+  /* Focus styles */
+  .focus-ring {
+    @apply outline-none ring-2 ring-accent-primary/50 ring-offset-2 ring-offset-bg-primary;
+  }
+  
+  /* Glass effect */
+  .glass {
+    @apply bg-bg-secondary/80 backdrop-blur-xl border border-border-subtle;
+  }
+  
+  /* Keyboard shortcut badge */
+  .kbd {
+    @apply inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-medium 
+           bg-bg-tertiary text-text-muted rounded border border-border-subtle
+           font-mono min-w-[1.5rem];
+  }
+}
+
+@layer utilities {
+  /* Tauri window drag */
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+  
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+  
+  /* Text gradient */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-accent-primary to-blue-400;
+  }
+}
