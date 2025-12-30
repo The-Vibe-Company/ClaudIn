@@ -82,6 +82,78 @@ profilesRouter.post('/bulk', async (c) => {
   });
 });
 
+profilesRouter.get('/posts/list', (c) => {
+  const db = getDb();
+  const limit = parseInt(c.req.query('limit') || '50');
+  const offset = parseInt(c.req.query('offset') || '0');
+  const search = c.req.query('search') || '';
+  
+  let whereClause = '';
+  const params: (string | number)[] = [];
+  
+  if (search) {
+    whereClause = `WHERE po.content LIKE ? OR po.author_name LIKE ?`;
+    const searchPattern = `%${search}%`;
+    params.push(searchPattern, searchPattern);
+  }
+  
+  const countResult = db.prepare(`SELECT COUNT(*) as count FROM posts po ${whereClause}`).get(...params) as { count: number };
+  
+  const posts = db.prepare(`
+    SELECT 
+      po.*,
+      p.full_name as profile_full_name,
+      p.profile_picture_url as profile_picture
+    FROM posts po
+    LEFT JOIN profiles p ON p.public_identifier = po.author_public_identifier
+    ${whereClause}
+    ORDER BY po.posted_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, limit, offset) as Array<{
+    id: string;
+    author_public_identifier: string;
+    author_name: string;
+    author_headline: string;
+    author_profile_picture_url: string;
+    content: string;
+    post_url: string;
+    likes_count: number;
+    comments_count: number;
+    reposts_count: number;
+    has_image: number;
+    has_video: number;
+    has_document: number;
+    image_urls: string;
+    posted_at: string;
+    profile_full_name: string | null;
+    profile_picture: string | null;
+  }>;
+  
+  return c.json({
+    posts: posts.map(p => ({
+      id: p.id,
+      authorPublicIdentifier: p.author_public_identifier,
+      authorName: p.profile_full_name || p.author_name,
+      authorHeadline: p.author_headline,
+      authorProfilePictureUrl: p.profile_picture || p.author_profile_picture_url,
+      content: p.content,
+      postUrl: p.post_url,
+      likesCount: p.likes_count,
+      commentsCount: p.comments_count,
+      repostsCount: p.reposts_count,
+      hasImage: !!p.has_image,
+      hasVideo: !!p.has_video,
+      hasDocument: !!p.has_document,
+      imageUrls: (JSON.parse(p.image_urls || '[]') as string[]).filter(
+        (url: string) => !url.includes('profile-displayphoto') && !url.includes('company-logo')
+      ),
+      postedAt: p.posted_at
+    })),
+    total: countResult.count,
+    hasMore: offset + posts.length < countResult.count
+  });
+});
+
 profilesRouter.get('/crm/list', (c) => {
   const db = getDb();
   const limit = parseInt(c.req.query('limit') || '50');

@@ -158,3 +158,38 @@ export async function fetchCRMProfiles(params: { search?: string; limit?: number
   if (!res.ok) throw new Error('Failed to fetch CRM profiles');
   return res.json() as Promise<CRMResponse>;
 }
+
+export interface Post {
+  id: string;
+  authorPublicIdentifier: string;
+  authorName: string;
+  authorHeadline: string;
+  authorProfilePictureUrl: string | null;
+  content: string;
+  postUrl: string;
+  likesCount: number;
+  commentsCount: number;
+  repostsCount: number;
+  hasImage: boolean;
+  hasVideo: boolean;
+  hasDocument: boolean;
+  imageUrls: string[];
+  postedAt: string;
+}
+
+export interface PostsResponse {
+  posts: Post[];
+  total: number;
+  hasMore: boolean;
+}
+
+export async function fetchPosts(params: { search?: string; limit?: number; offset?: number } = {}) {
+  const query = new URLSearchParams();
+  if (params.search) query.append('search', params.search);
+  if (params.limit) query.append('limit', String(params.limit));
+  if (params.offset) query.append('offset', String(params.offset));
+
+  const res = await fetch(`${API_BASE}/profiles/posts/list?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch posts');
+  return res.json() as Promise<PostsResponse>;
+}

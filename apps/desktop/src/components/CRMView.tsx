@@ -39,23 +39,25 @@ export function CRMView() {
           <div className="p-2 rounded-lg bg-accent-primary/10 text-accent-primary">
             <Users className="w-5 h-5" />
           </div>
-          <h1 className="text-lg font-semibold text-text-primary">Network CRM</h1>
-          <span className="text-sm text-text-muted bg-bg-tertiary px-2 py-0.5 rounded-full border border-border-subtle">
-            {data?.total ?? 0}
-          </span>
+          <div className="flex flex-col">
+            <h1 className="text-lg font-bold text-text-primary leading-none">Network CRM</h1>
+            <span className="text-xs text-text-muted mt-1">
+              {data?.total ?? 0} connections found
+            </span>
+          </div>
         </div>
 
-        <div className="relative w-64 group">
+        <div className="relative w-72 group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-focus-within:text-accent-primary transition-colors" />
           <input
             type="text"
             placeholder="Search network..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg bg-bg-secondary border border-border-subtle 
+            className="w-full pl-10 pr-4 py-2 rounded-xl bg-bg-secondary border border-border-subtle 
                      text-sm text-text-primary placeholder:text-text-muted
-                     focus:outline-none focus:ring-2 focus:ring-accent-primary/50 focus:border-transparent
-                     transition-all"
+                     focus:outline-none focus:ring-2 focus:ring-accent-primary/20 focus:border-accent-primary
+                     transition-all shadow-sm"
           />
         </div>
       </div>
@@ -103,8 +105,8 @@ function ProfileCard({ profile, index }: { profile: CRMProfile; index: number })
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
-      className="group bg-bg-secondary border border-border-subtle rounded-xl p-4 
-                 hover:bg-bg-tertiary hover:border-accent-primary/30 hover:shadow-lg hover:shadow-accent-primary/5 
+      className="group bg-bg-secondary border border-border-subtle rounded-2xl p-4 
+                 hover:bg-bg-tertiary hover:border-accent-primary/30 hover:shadow-lg hover:shadow-black/5 
                  transition-all cursor-default relative overflow-hidden"
     >
       <div className="flex gap-4">

@@ -363,15 +363,23 @@ function extractFeedPosts(): LinkedInPost[] {
   }
   
   feedItems.forEach((item, idx) => {
-    const authorLink = item.querySelector('a[href*="/in/"]') as HTMLAnchorElement;
+    const actorContainer = item.querySelector('[class*="update-components-actor"], [class*="feed-shared-actor"]');
+    if (!actorContainer) return;
+    
+    const authorLink = actorContainer.querySelector('a[href*="/in/"]') as HTMLAnchorElement;
     const publicIdentifier = authorLink?.href?.match(/\/in\/([^/?]+)/)?.[1] || '';
     if (!publicIdentifier) return;
     
-    const authorNameEl = item.querySelector('[class*="actor__name"] span[aria-hidden="true"], [class*="actor__title"] span');
-    const authorHeadlineEl = item.querySelector('[class*="actor__description"], [class*="actor__subtitle"]');
-    const authorImgEl = item.querySelector('[class*="actor"] img, [class*="avatar"] img') as HTMLImageElement;
-    const contentEl = item.querySelector('[class*="text__text-view"], [class*="update-v2__description"], [class*="commentary"]');
-    const timeEl = item.querySelector('[class*="actor__sub-description"] span[aria-hidden="true"], time');
+    const nameSpans = actorContainer.querySelectorAll('[class*="actor__name"] span[aria-hidden="true"], [class*="actor__title"] span[aria-hidden="true"]');
+    const authorName = nameSpans[0]?.textContent?.trim() || '';
+    
+    const headlineSpans = actorContainer.querySelectorAll('[class*="actor__description"] span[aria-hidden="true"], [class*="actor__subtitle"] span[aria-hidden="true"]');
+    const authorHeadline = headlineSpans[0]?.textContent?.trim() || null;
+    
+    const authorImgEl = actorContainer.querySelector('img[class*="presence-entity"], img[class*="actor__avatar-image"], img[alt]') as HTMLImageElement;
+    const contentEl = item.querySelector('[class*="feed-shared-text"] span[dir="ltr"], [class*="update-components-text"] span[dir="ltr"], [class*="commentary"] span[dir="ltr"]');
+    const timeSpans = actorContainer.querySelectorAll('[class*="actor__sub-description"] span[aria-hidden="true"]');
+    const timeEl = timeSpans[0];
     
     const likesEl = item.querySelector('[class*="reaction-count"], [class*="social-counts__reactions"]');
     const commentsEl = item.querySelector('[class*="social-counts__comments"], button[aria-label*="comment"]');
@@ -380,8 +388,12 @@ function extractFeedPosts(): LinkedInPost[] {
     const hasVideo = !!item.querySelector('video, [class*="video"]');
     const hasDocument = !!item.querySelector('[class*="document"]');
     
-    const imageEls = item.querySelectorAll('img[src*="media"]') as NodeListOf<HTMLImageElement>;
-    const imageUrls = Array.from(imageEls).map(img => img.src).filter(Boolean).slice(0, 5);
+    const contentArea = item.querySelector('[class*="feed-shared-update-v2__content"], [class*="update-components-content"]') || item;
+    const imageEls = contentArea.querySelectorAll('img[src*="media-exp"], img[src*="dms.licdn"]') as NodeListOf<HTMLImageElement>;
+    const imageUrls = Array.from(imageEls)
+      .map(img => img.src)
+      .filter(src => src && !src.includes('profile-displayphoto') && !src.includes('shrink_100'))
+      .slice(0, 5);
     
     const urn = item.getAttribute('data-urn') || item.getAttribute('data-id') || '';
     const urnMatch = urn.match(/activity:(\d+)/);
@@ -394,8 +406,8 @@ function extractFeedPosts(): LinkedInPost[] {
       id: postId,
       authorProfileId: '',
       authorPublicIdentifier: publicIdentifier,
-      authorName: authorNameEl?.textContent?.trim() || '',
-      authorHeadline: authorHeadlineEl?.textContent?.trim() || null,
+      authorName: authorName || '',
+      authorHeadline: authorHeadline,
       authorProfilePictureUrl: authorImgEl?.src || null,
       content,
       postUrl: `https://www.linkedin.com/feed/update/urn:li:activity:${postId}`,

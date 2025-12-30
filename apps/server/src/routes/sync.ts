@@ -101,22 +101,42 @@ syncRouter.post('/messages', async (c) => {
   
   const db = getDb();
   let saved = 0;
-  
-  const upsertStmt = db.prepare(`
-    INSERT INTO messages (id, conversation_id, profile_id, direction, content, sent_at, is_read, scraped_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      content = excluded.content,
-      is_read = excluded.is_read,
-      scraped_at = excluded.scraped_at
-  `);
+  let profilesCreated = 0;
   
   for (const msg of messages) {
+    if (msg.profileId) {
+      const existing = db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(msg.profileId);
+      if (!existing) {
+        upsertProfile({
+          publicIdentifier: msg.profileId,
+          linkedinUrl: `https://www.linkedin.com/in/${msg.profileId}`,
+          firstName: '',
+          lastName: '',
+          fullName: msg.profileId,
+          headline: '',
+          scrapedAt: new Date().toISOString(),
+          isPartial: true,
+        });
+        profilesCreated++;
+      }
+    }
+    
     try {
-      upsertStmt.run(
+      const profileRow = msg.profileId 
+        ? db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(msg.profileId) as { id: string } | undefined
+        : undefined;
+      
+      db.prepare(`
+        INSERT INTO messages (id, conversation_id, profile_id, direction, content, sent_at, is_read, scraped_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          content = excluded.content,
+          is_read = excluded.is_read,
+          scraped_at = excluded.scraped_at
+      `).run(
         msg.id,
         msg.conversationId,
-        msg.profileId,
+        profileRow?.id || msg.profileId,
         msg.direction,
         msg.content,
         msg.sentAt,
@@ -134,7 +154,7 @@ syncRouter.post('/messages', async (c) => {
     VALUES (?, ?, ?)
   `).run('messages', saved, new Date().toISOString());
   
-  return c.json({ success: true, saved, total: messages.length });
+  return c.json({ success: true, saved, total: messages.length, profilesCreated });
 });
 
 syncRouter.post('/posts', async (c) => {
@@ -146,25 +166,46 @@ syncRouter.post('/posts', async (c) => {
   
   const db = getDb();
   let saved = 0;
-  
-  const upsertStmt = db.prepare(`
-    INSERT INTO posts (id, author_profile_id, author_public_identifier, author_name, author_headline, 
-      author_profile_picture_url, content, post_url, likes_count, comments_count, reposts_count,
-      has_image, has_video, has_document, image_urls, posted_at, scraped_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      content = excluded.content,
-      likes_count = excluded.likes_count,
-      comments_count = excluded.comments_count,
-      reposts_count = excluded.reposts_count,
-      scraped_at = excluded.scraped_at
-  `);
+  let profilesCreated = 0;
   
   for (const post of posts) {
+    if (post.authorPublicIdentifier) {
+      const existing = db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(post.authorPublicIdentifier);
+      if (!existing) {
+        upsertProfile({
+          publicIdentifier: post.authorPublicIdentifier,
+          linkedinUrl: `https://www.linkedin.com/in/${post.authorPublicIdentifier}`,
+          firstName: post.authorName?.split(' ')[0] || '',
+          lastName: post.authorName?.split(' ').slice(1).join(' ') || '',
+          fullName: post.authorName || post.authorPublicIdentifier,
+          headline: post.authorHeadline || '',
+          profilePictureUrl: post.authorProfilePictureUrl,
+          scrapedAt: new Date().toISOString(),
+          isPartial: true,
+        });
+        profilesCreated++;
+      }
+    }
+    
     try {
-      upsertStmt.run(
+      const profileRow = post.authorPublicIdentifier 
+        ? db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(post.authorPublicIdentifier) as { id: string } | undefined
+        : undefined;
+      
+      db.prepare(`
+        INSERT INTO posts (id, author_profile_id, author_public_identifier, author_name, author_headline, 
+          author_profile_picture_url, content, post_url, likes_count, comments_count, reposts_count,
+          has_image, has_video, has_document, image_urls, posted_at, scraped_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          content = excluded.content,
+          likes_count = excluded.likes_count,
+          comments_count = excluded.comments_count,
+          reposts_count = excluded.reposts_count,
+          scraped_at = excluded.scraped_at
+      `).run(
         post.id,
-        post.authorProfileId || null,
+        profileRow?.id || null,
         post.authorPublicIdentifier,
         post.authorName,
         post.authorHeadline,
@@ -192,5 +233,5 @@ syncRouter.post('/posts', async (c) => {
     VALUES (?, ?, ?)
   `).run('posts', saved, new Date().toISOString());
   
-  return c.json({ success: true, saved, total: posts.length });
+  return c.json({ success: true, saved, total: posts.length, profilesCreated });
 });

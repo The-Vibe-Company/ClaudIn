@@ -7,8 +7,8 @@ interface ConversationWithMessages extends ChatConversation {
 
 interface AppState {
   // UI State
-  activeView: 'chat' | 'crm';
-  setActiveView: (view: 'chat' | 'crm') => void;
+  activeView: 'chat' | 'crm' | 'posts';
+  setActiveView: (view: 'chat' | 'crm' | 'posts') => void;
   isCommandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
@@ -37,7 +37,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   // UI State
-  activeView: 'chat',
+  activeView: 'crm',
   setActiveView: (view) => set({ activeView: view }),
   isCommandPaletteOpen: false,
   setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
