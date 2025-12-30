@@ -18,6 +18,9 @@ interface AppState {
   isSettingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   
+  isMCPModalOpen: boolean;
+  setMCPModalOpen: (open: boolean) => void;
+  
   selectedProfileId: string | null;
   openProfile: (id: string) => void;
   closeProfile: () => void;
@@ -51,6 +54,9 @@ export const useAppStore = create<AppState>((set) => ({
   
   isSettingsOpen: false,
   setSettingsOpen: (open) => set({ isSettingsOpen: open }),
+  
+  isMCPModalOpen: false,
+  setMCPModalOpen: (open) => set({ isMCPModalOpen: open }),
   
   selectedProfileId: null,
   openProfile: (id) => set({ selectedProfileId: id, activeView: 'profile' }),

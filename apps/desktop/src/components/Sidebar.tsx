@@ -10,7 +10,8 @@ import {
   Newspaper, 
   ChevronDown, 
   ChevronRight,
-  Activity
+  Activity,
+  Terminal
 } from 'lucide-react';
 import { useAppStore } from '../store/app';
 import { fetchConversations, fetchStats } from '../lib/api';
@@ -24,6 +25,7 @@ export function Sidebar() {
     activeConversationId,
     setActiveConversation,
     setSettingsOpen,
+    setMCPModalOpen,
     activeView,
     setActiveView,
   } = useAppStore();
@@ -193,7 +195,15 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="p-4 border-t border-border-subtle">
+      <div className="p-4 border-t border-border-subtle space-y-1">
+        <button
+          onClick={() => setMCPModalOpen(true)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary 
+                     hover:bg-bg-tertiary hover:text-text-primary transition-all text-sm group"
+        >
+          <Terminal className="w-4 h-4 text-accent-primary" />
+          Install MCP
+        </button>
         <button
           onClick={() => setSettingsOpen(true)}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary 

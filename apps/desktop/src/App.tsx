@@ -6,6 +6,7 @@ import { PostsView } from './components/PostsView';
 import { ProfileDetailView } from './components/ProfileDetailView';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
+import { MCPModal } from './components/MCPModal';
 import { useAppStore } from './store/app';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
@@ -45,6 +46,7 @@ export default function App() {
       />
 
       <SettingsModal />
+      <MCPModal />
     </div>
   );
 }
