@@ -165,8 +165,65 @@ export function initDatabase(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_posts_posted ON posts(posted_at);
   `);
 
+  cleanupDuplicatedText();
+  
   console.log('Database initialized');
   return db;
+}
+
+function cleanupDuplicatedText() {
+  const posts = db.prepare('SELECT id, author_name, author_headline FROM posts').all() as Array<{
+    id: string;
+    author_name: string | null;
+    author_headline: string | null;
+  }>;
+  
+  let fixed = 0;
+  for (const post of posts) {
+    const cleanName = deduplicateString(post.author_name);
+    const cleanHeadline = deduplicateString(post.author_headline);
+    
+    if (cleanName !== post.author_name || cleanHeadline !== post.author_headline) {
+      db.prepare('UPDATE posts SET author_name = ?, author_headline = ? WHERE id = ?')
+        .run(cleanName, cleanHeadline, post.id);
+      fixed++;
+    }
+  }
+  
+  const profiles = db.prepare('SELECT id, full_name, headline FROM profiles').all() as Array<{
+    id: string;
+    full_name: string | null;
+    headline: string | null;
+  }>;
+  
+  for (const profile of profiles) {
+    const cleanName = deduplicateString(profile.full_name);
+    const cleanHeadline = deduplicateString(profile.headline);
+    
+    if (cleanName !== profile.full_name || cleanHeadline !== profile.headline) {
+      const nameParts = cleanName.split(' ');
+      db.prepare('UPDATE profiles SET full_name = ?, first_name = ?, last_name = ?, headline = ? WHERE id = ?')
+        .run(cleanName, nameParts[0] || '', nameParts.slice(1).join(' ') || '', cleanHeadline, profile.id);
+      fixed++;
+    }
+  }
+  
+  if (fixed > 0) {
+    console.log(`Cleaned ${fixed} records with duplicated text`);
+  }
+}
+
+function deduplicateString(text: string | null): string {
+  if (!text) return '';
+  const trimmed = text.trim();
+  const len = trimmed.length;
+  if (len < 2 || len % 2 !== 0) return trimmed;
+  
+  const half = len / 2;
+  const first = trimmed.slice(0, half);
+  const second = trimmed.slice(half);
+  
+  return first === second ? first : trimmed;
 }
 
 export function generateId(prefix: string = ''): string {

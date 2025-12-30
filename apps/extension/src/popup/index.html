@@ -82,6 +82,12 @@
       margin-bottom: 12px;
     }
     
+    .status-time {
+      margin-left: auto;
+      color: #4ade80;
+      font-size: 11px;
+    }
+    
     .status-dot {
       width: 8px;
       height: 8px;
@@ -180,11 +186,12 @@
   
   <div class="status">
     <div class="status-dot"></div>
-    <span>Auto-collecting as you browse LinkedIn</span>
+    <span>Auto-sync every 5 min</span>
+    <span class="status-time" id="lastServerSync"></span>
   </div>
   
   <button class="sync-btn" id="syncBtn">
-    Sync to Desktop App
+    Sync Now
   </button>
   
   <div class="sync-result" id="syncResult"></div>

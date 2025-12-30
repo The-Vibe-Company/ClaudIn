@@ -8,6 +8,20 @@ import { getDb } from '../db/index.js';
 import { upsertProfile } from '../db/profiles.js';
 import type { LinkedInProfile, LinkedInMessage, LinkedInPost } from '@claudin/shared';
 
+function deduplicateText(text: string | null | undefined): string {
+  if (!text) return '';
+  const trimmed = text.trim();
+  const len = trimmed.length;
+  if (len < 2 || len % 2 !== 0) return trimmed;
+  
+  const half = len / 2;
+  const first = trimmed.slice(0, half);
+  const second = trimmed.slice(half);
+  
+  if (first === second) return first;
+  return trimmed;
+}
+
 export const syncRouter = new Hono();
 
 // Receive profiles from extension
@@ -169,16 +183,19 @@ syncRouter.post('/posts', async (c) => {
   let profilesCreated = 0;
   
   for (const post of posts) {
+    const cleanName = deduplicateText(post.authorName);
+    const cleanHeadline = deduplicateText(post.authorHeadline);
+    
     if (post.authorPublicIdentifier) {
       const existing = db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(post.authorPublicIdentifier);
       if (!existing) {
         upsertProfile({
           publicIdentifier: post.authorPublicIdentifier,
           linkedinUrl: `https://www.linkedin.com/in/${post.authorPublicIdentifier}`,
-          firstName: post.authorName?.split(' ')[0] || '',
-          lastName: post.authorName?.split(' ').slice(1).join(' ') || '',
-          fullName: post.authorName || post.authorPublicIdentifier,
-          headline: post.authorHeadline || '',
+          firstName: cleanName.split(' ')[0] || '',
+          lastName: cleanName.split(' ').slice(1).join(' ') || '',
+          fullName: cleanName || post.authorPublicIdentifier,
+          headline: cleanHeadline,
           profilePictureUrl: post.authorProfilePictureUrl,
           scrapedAt: new Date().toISOString(),
           isPartial: true,
@@ -198,6 +215,8 @@ syncRouter.post('/posts', async (c) => {
           has_image, has_video, has_document, image_urls, posted_at, scraped_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
+          author_name = excluded.author_name,
+          author_headline = excluded.author_headline,
           content = excluded.content,
           likes_count = excluded.likes_count,
           comments_count = excluded.comments_count,
@@ -207,8 +226,8 @@ syncRouter.post('/posts', async (c) => {
         post.id,
         profileRow?.id || null,
         post.authorPublicIdentifier,
-        post.authorName,
-        post.authorHeadline,
+        cleanName,
+        cleanHeadline,
         post.authorProfilePictureUrl,
         post.content,
         post.postUrl,

@@ -29,6 +29,14 @@ const STORAGE_KEYS = {
   STATS: 'claudin_stats',
 } as const;
 
+const ALARM_NAMES = {
+  AUTO_SYNC: 'claudin_auto_sync',
+  FEED_REFRESH: 'claudin_feed_refresh',
+} as const;
+
+const SYNC_INTERVAL_MINUTES = 5;
+const FEED_REFRESH_INTERVAL_MINUTES = 15;
+
 const SERVER_URL = 'http://localhost:3847/api';
 
 const profilesCache = new Map<string, LinkedInProfile>();
@@ -220,16 +228,71 @@ chrome.runtime.onMessageExternal?.addListener((message, _sender, sendResponse) =
   }
 });
 
-// Initialize on install/update
+async function setupAlarms() {
+  await chrome.alarms.create(ALARM_NAMES.AUTO_SYNC, {
+    delayInMinutes: 1,
+    periodInMinutes: SYNC_INTERVAL_MINUTES,
+  });
+  
+  await chrome.alarms.create(ALARM_NAMES.FEED_REFRESH, {
+    delayInMinutes: 2,
+    periodInMinutes: FEED_REFRESH_INTERVAL_MINUTES,
+  });
+  
+  console.log(`[ClaudIn] Alarms set: sync every ${SYNC_INTERVAL_MINUTES}min, feed refresh every ${FEED_REFRESH_INTERVAL_MINUTES}min`);
+}
+
+async function refreshLinkedInFeed() {
+  try {
+    const tabs = await chrome.tabs.query({ url: 'https://www.linkedin.com/feed/*' });
+    
+    if (tabs.length === 0) {
+      console.log('[ClaudIn] No LinkedIn feed tab found, skipping refresh');
+      return { refreshed: false, reason: 'no_feed_tab' };
+    }
+    
+    const feedTab = tabs[0];
+    if (feedTab.id) {
+      await chrome.tabs.reload(feedTab.id);
+      console.log('[ClaudIn] Refreshed LinkedIn feed tab');
+      return { refreshed: true, tabId: feedTab.id };
+    }
+    
+    return { refreshed: false, reason: 'no_tab_id' };
+  } catch (error) {
+    console.error('[ClaudIn] Feed refresh failed:', error);
+    return { refreshed: false, reason: String(error) };
+  }
+}
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  console.log(`[ClaudIn] Alarm triggered: ${alarm.name}`);
+  
+  switch (alarm.name) {
+    case ALARM_NAMES.AUTO_SYNC: {
+      const result = await syncToServer();
+      console.log('[ClaudIn] Auto-sync result:', result);
+      break;
+    }
+    
+    case ALARM_NAMES.FEED_REFRESH: {
+      const result = await refreshLinkedInFeed();
+      console.log('[ClaudIn] Feed refresh result:', result);
+      break;
+    }
+  }
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[ClaudIn] Extension installed/updated');
   initializeCache();
+  setupAlarms();
 });
 
-// Initialize on startup
 chrome.runtime.onStartup.addListener(() => {
   console.log('[ClaudIn] Extension started');
   initializeCache();
+  setupAlarms();
 });
 
 async function syncToServer(): Promise<{ success: boolean; profiles?: number; messages?: number; posts?: number; error?: string }> {

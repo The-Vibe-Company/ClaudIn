@@ -370,11 +370,15 @@ function extractFeedPosts(): LinkedInPost[] {
     const publicIdentifier = authorLink?.href?.match(/\/in\/([^/?]+)/)?.[1] || '';
     if (!publicIdentifier) return;
     
-    const nameSpans = actorContainer.querySelectorAll('[class*="actor__name"] span[aria-hidden="true"], [class*="actor__title"] span[aria-hidden="true"]');
-    const authorName = nameSpans[0]?.textContent?.trim() || '';
+    const nameContainer = actorContainer.querySelector('[class*="actor__name"], [class*="actor__title"]');
+    const nameSpan = nameContainer?.querySelector(':scope > span[aria-hidden="true"] > span[aria-hidden="true"]') 
+      || nameContainer?.querySelector(':scope > span[aria-hidden="true"]');
+    const authorName = nameSpan?.textContent?.trim() || '';
     
-    const headlineSpans = actorContainer.querySelectorAll('[class*="actor__description"] span[aria-hidden="true"], [class*="actor__subtitle"] span[aria-hidden="true"]');
-    const authorHeadline = headlineSpans[0]?.textContent?.trim() || null;
+    const headlineContainer = actorContainer.querySelector('[class*="actor__description"], [class*="actor__subtitle"]');
+    const headlineSpan = headlineContainer?.querySelector(':scope > span[aria-hidden="true"] > span[aria-hidden="true"]')
+      || headlineContainer?.querySelector(':scope > span[aria-hidden="true"]');
+    const authorHeadline = headlineSpan?.textContent?.trim() || null;
     
     const authorImgEl = actorContainer.querySelector('img[class*="presence-entity"], img[class*="actor__avatar-image"], img[alt]') as HTMLImageElement;
     const contentEl = item.querySelector('[class*="feed-shared-text"] span[dir="ltr"], [class*="update-components-text"] span[dir="ltr"], [class*="commentary"] span[dir="ltr"]');

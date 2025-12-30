@@ -4,7 +4,7 @@ async function updateStats() {
   const profiles = data.claudin_profiles as Record<string, unknown> | undefined;
   const messages = data.claudin_messages as Record<string, unknown> | undefined;
   const posts = data.claudin_posts as Record<string, unknown> | undefined;
-  const stats = data.claudin_stats as { lastSyncAt?: string } | undefined;
+  const stats = data.claudin_stats as { lastSyncAt?: string; lastServerSync?: string } | undefined;
   
   const profileCount = profiles ? Object.keys(profiles).length : 0;
   const messageCount = messages ? Object.keys(messages).length : 0;
@@ -14,6 +14,7 @@ async function updateStats() {
   const messageCountEl = document.getElementById('messageCount');
   const postCountEl = document.getElementById('postCount');
   const lastSyncEl = document.getElementById('lastSync');
+  const lastServerSyncEl = document.getElementById('lastServerSync');
   
   if (profileCountEl) profileCountEl.textContent = profileCount.toString();
   if (messageCountEl) messageCountEl.textContent = messageCount.toString();
@@ -21,6 +22,12 @@ async function updateStats() {
   
   if (lastSyncEl && stats?.lastSyncAt) {
     lastSyncEl.textContent = formatTimeAgo(stats.lastSyncAt);
+  }
+  
+  if (lastServerSyncEl) {
+    lastServerSyncEl.textContent = stats?.lastServerSync 
+      ? `Last: ${formatTimeAgo(stats.lastServerSync)}`
+      : '';
   }
 }
 
