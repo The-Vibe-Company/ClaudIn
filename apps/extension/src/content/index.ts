@@ -3,7 +3,7 @@
  * Extracts profile data as you browse
  */
 
-import type { LinkedInProfile, LinkedInMessage, LinkedInPost, ProfileScrapeEvent, SearchScrapeEvent, ScrapeEvent } from '@claudin/shared';
+import type { LinkedInProfile, LinkedInMessage, LinkedInPost, PostType, SharedLink, ProfileScrapeEvent, SearchScrapeEvent, ScrapeEvent } from '@claudin/shared';
 
 interface MessagesScrapeEvent extends ScrapeEvent {
   type: 'messages';
@@ -240,7 +240,17 @@ function getSearchQuery(): string {
 }
 
 function sendToBackground(event: ProfileScrapeEvent | SearchScrapeEvent | MessagesScrapeEvent | FeedScrapeEvent) {
-  chrome.runtime.sendMessage(event);
+  try {
+    if (!chrome.runtime?.id) {
+      console.log('[ClaudIn] Extension context invalidated, please refresh the page');
+      return;
+    }
+    chrome.runtime.sendMessage(event).catch(() => {
+      console.log('[ClaudIn] Extension reloaded, please refresh the page');
+    });
+  } catch {
+    console.log('[ClaudIn] Extension context invalidated, please refresh the page');
+  }
 }
 
 function parseRelativeTime(timeStr: string): string {
@@ -337,6 +347,89 @@ function extractMessages(): LinkedInMessage[] {
   return messages;
 }
 
+function extractSharedLink(item: Element): SharedLink | null {
+  const articleContainer = item.querySelector(
+    '[class*="feed-shared-article"], [class*="update-components-article"], ' +
+    '[class*="feed-shared-external-video"], [class*="article-content"]'
+  );
+  
+  if (!articleContainer) return null;
+  
+  const linkEl = articleContainer.querySelector('a[href]') as HTMLAnchorElement;
+  if (!linkEl) return null;
+  
+  const url = linkEl.href;
+  if (!url || url.includes('linkedin.com')) return null;
+  
+  const titleEl = articleContainer.querySelector(
+    '[class*="article__title"], [class*="mini-update__title"], ' +
+    '[class*="feed-shared-article__title"], span[dir="ltr"]'
+  );
+  const descEl = articleContainer.querySelector(
+    '[class*="article__subtitle"], [class*="article__description"], ' +
+    '[class*="feed-shared-article__subtitle"]'
+  );
+  const imgEl = articleContainer.querySelector('img') as HTMLImageElement;
+  
+  let domain: string | null = null;
+  try {
+    domain = new URL(url).hostname.replace('www.', '');
+  } catch {}
+  
+  return {
+    url,
+    title: titleEl?.textContent?.trim() || null,
+    description: descEl?.textContent?.trim() || null,
+    imageUrl: imgEl?.src || null,
+    domain,
+  };
+}
+
+function extractVideoUrl(item: Element): string | null {
+  const videoEl = item.querySelector('video[src]') as HTMLVideoElement;
+  if (videoEl?.src) return videoEl.src;
+  
+  const sourceEl = item.querySelector('video source[src]') as HTMLSourceElement;
+  if (sourceEl?.src) return sourceEl.src;
+  
+  const playerEl = item.querySelector('[data-video-url]');
+  if (playerEl) return playerEl.getAttribute('data-video-url');
+  
+  return null;
+}
+
+function extractHashtags(text: string): string[] {
+  const matches = text.match(/#[\w\u00C0-\u024F]+/g) || [];
+  return [...new Set(matches.map(h => h.toLowerCase()))];
+}
+
+function extractMentions(item: Element): string[] {
+  const mentionLinks = item.querySelectorAll('a[href*="/in/"]') as NodeListOf<HTMLAnchorElement>;
+  const mentions: string[] = [];
+  
+  mentionLinks.forEach(link => {
+    const match = link.href.match(/\/in\/([^/?]+)/);
+    if (match && link.closest('[class*="feed-shared-text"], [class*="commentary"]')) {
+      mentions.push(match[1]);
+    }
+  });
+  
+  return [...new Set(mentions)];
+}
+
+function detectPostType(item: Element, hasImage: boolean, hasVideo: boolean, hasDocument: boolean, hasLink: boolean, hasPoll: boolean, isRepost: boolean): PostType {
+  if (isRepost) return 'repost';
+  if (hasPoll) return 'poll';
+  if (item.querySelector('[class*="job-posting"], [class*="jobs-job"]')) return 'job';
+  if (item.querySelector('[class*="celebration"], [class*="work-anniversary"], [class*="hiring"]')) return 'celebration';
+  if (item.querySelector('[class*="event"]')) return 'event';
+  if (hasDocument) return 'document';
+  if (hasVideo) return 'video';
+  if (hasLink) return 'article';
+  if (hasImage) return 'image';
+  return 'text';
+}
+
 function extractFeedPosts(): LinkedInPost[] {
   const posts: LinkedInPost[] = [];
   
@@ -352,7 +445,6 @@ function extractFeedPosts(): LinkedInPost[] {
     const items = document.querySelectorAll(selector);
     if (items.length > 0) {
       feedItems = items;
-      console.log(`[ClaudIn] Found ${items.length} posts with selector: ${selector}`);
       break;
     }
   }
@@ -387,41 +479,77 @@ function extractFeedPosts(): LinkedInPost[] {
     
     const likesEl = item.querySelector('[class*="reaction-count"], [class*="social-counts__reactions"]');
     const commentsEl = item.querySelector('[class*="social-counts__comments"], button[aria-label*="comment"]');
+    const repostsEl = item.querySelector('[class*="social-counts__reposts"], button[aria-label*="repost"]');
     
-    const hasImage = !!item.querySelector('[class*="image"], img[class*="feed"]');
-    const hasVideo = !!item.querySelector('video, [class*="video"]');
-    const hasDocument = !!item.querySelector('[class*="document"]');
+    const hasImage = !!item.querySelector('[class*="feed-shared-image"], img[class*="feed"], [class*="update-components-image"]');
+    const hasVideo = !!item.querySelector('video, [class*="video-player"], [class*="feed-shared-video"]');
+    const hasDocument = !!item.querySelector('[class*="document"], [class*="feed-shared-document"]');
+    const hasPoll = !!item.querySelector('[class*="poll"], [class*="feed-shared-poll"]');
+    
+    const sharedLink = extractSharedLink(item);
+    const hasLink = sharedLink !== null;
+    
+    const videoUrl = extractVideoUrl(item);
+    
+    const isRepostContainer = item.querySelector('[class*="feed-shared-update-v2__content"] [class*="update-components-actor"]');
+    const isRepost = !!isRepostContainer;
+    
+    let originalAuthorName: string | null = null;
+    let originalAuthorIdentifier: string | null = null;
+    
+    if (isRepost && isRepostContainer) {
+      const origLink = isRepostContainer.querySelector('a[href*="/in/"]') as HTMLAnchorElement;
+      originalAuthorIdentifier = origLink?.href?.match(/\/in\/([^/?]+)/)?.[1] || null;
+      const origNameEl = isRepostContainer.querySelector('[class*="actor__name"] span[aria-hidden="true"]');
+      originalAuthorName = origNameEl?.textContent?.trim() || null;
+    }
     
     const contentArea = item.querySelector('[class*="feed-shared-update-v2__content"], [class*="update-components-content"]') || item;
-    const imageEls = contentArea.querySelectorAll('img[src*="media-exp"], img[src*="dms.licdn"]') as NodeListOf<HTMLImageElement>;
+    const imageEls = contentArea.querySelectorAll('img[src*="media"], img[src*="dms.licdn"]') as NodeListOf<HTMLImageElement>;
     const imageUrls = Array.from(imageEls)
       .map(img => img.src)
-      .filter(src => src && !src.includes('profile-displayphoto') && !src.includes('shrink_100'))
-      .slice(0, 5);
+      .filter(src => src && !src.includes('profile-displayphoto') && !src.includes('shrink_100') && !src.includes('ghost'))
+      .slice(0, 10);
     
     const urn = item.getAttribute('data-urn') || item.getAttribute('data-id') || '';
     const urnMatch = urn.match(/activity:(\d+)/);
     const postId = urnMatch?.[1] || `post_${Date.now()}_${idx}`;
     
     const content = contentEl?.textContent?.trim() || '';
-    if (!content && !hasImage && !hasVideo) return;
+    
+    const postType = detectPostType(item, hasImage, hasVideo, hasDocument, hasLink, hasPoll, isRepost);
+    
+    if (!content && !hasImage && !hasVideo && !hasDocument && !hasLink && !hasPoll) return;
+    
+    const hashtags = extractHashtags(content);
+    const mentions = extractMentions(item);
     
     posts.push({
       id: postId,
       authorProfileId: '',
       authorPublicIdentifier: publicIdentifier,
       authorName: authorName || '',
-      authorHeadline: authorHeadline,
+      authorHeadline,
       authorProfilePictureUrl: authorImgEl?.src || null,
       content,
       postUrl: `https://www.linkedin.com/feed/update/urn:li:activity:${postId}`,
+      postType,
       likesCount: parseInt(likesEl?.textContent?.replace(/\D/g, '') || '0'),
       commentsCount: parseInt(commentsEl?.textContent?.replace(/\D/g, '') || '0'),
-      repostsCount: 0,
+      repostsCount: parseInt(repostsEl?.textContent?.replace(/\D/g, '') || '0'),
       hasImage,
       hasVideo,
       hasDocument,
+      hasLink,
+      hasPoll,
       imageUrls,
+      videoUrl,
+      sharedLink,
+      isRepost,
+      originalAuthorName,
+      originalAuthorIdentifier,
+      hashtags,
+      mentions,
       postedAt: parseRelativeTime(timeEl?.textContent || ''),
       scrapedAt: new Date().toISOString()
     });
@@ -555,14 +683,18 @@ contentObserver.observe(document.body, { childList: true, subtree: true });
 
 setTimeout(scrapeCurrentPage, 2000);
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.type === 'FORCE_SCRAPE') {
-    console.log('[ClaudIn] Force scrape requested');
-    scrapeCurrentPage().then(() => {
-      sendResponse({ success: true });
-    });
-    return true;
-  }
-});
+try {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message.type === 'FORCE_SCRAPE') {
+      console.log('[ClaudIn] Force scrape requested');
+      scrapeCurrentPage().then(() => {
+        sendResponse({ success: true });
+      });
+      return true;
+    }
+  });
+} catch {
+  console.log('[ClaudIn] Could not add message listener');
+}
 
 console.log('[ClaudIn] Content script loaded');

@@ -217,17 +217,30 @@ syncRouter.post('/posts', async (c) => {
         : undefined;
       
       db.prepare(`
-        INSERT INTO posts (id, author_profile_id, author_public_identifier, author_name, author_headline, 
-          author_profile_picture_url, content, post_url, likes_count, comments_count, reposts_count,
-          has_image, has_video, has_document, image_urls, posted_at, scraped_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO posts (
+          id, author_profile_id, author_public_identifier, author_name, author_headline, 
+          author_profile_picture_url, content, post_url, post_type,
+          likes_count, comments_count, reposts_count,
+          has_image, has_video, has_document, has_link, has_poll,
+          image_urls, video_url, shared_link,
+          is_repost, original_author_name, original_author_identifier,
+          hashtags, mentions, posted_at, scraped_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           author_name = excluded.author_name,
           author_headline = excluded.author_headline,
           content = excluded.content,
+          post_type = excluded.post_type,
           likes_count = excluded.likes_count,
           comments_count = excluded.comments_count,
           reposts_count = excluded.reposts_count,
+          has_link = excluded.has_link,
+          has_poll = excluded.has_poll,
+          video_url = excluded.video_url,
+          shared_link = excluded.shared_link,
+          hashtags = excluded.hashtags,
+          mentions = excluded.mentions,
           scraped_at = excluded.scraped_at
       `).run(
         post.id,
@@ -238,13 +251,23 @@ syncRouter.post('/posts', async (c) => {
         post.authorProfilePictureUrl,
         post.content,
         post.postUrl,
+        post.postType || 'text',
         post.likesCount,
         post.commentsCount,
         post.repostsCount,
         post.hasImage ? 1 : 0,
         post.hasVideo ? 1 : 0,
         post.hasDocument ? 1 : 0,
-        JSON.stringify(post.imageUrls),
+        post.hasLink ? 1 : 0,
+        post.hasPoll ? 1 : 0,
+        JSON.stringify(post.imageUrls || []),
+        post.videoUrl || null,
+        post.sharedLink ? JSON.stringify(post.sharedLink) : null,
+        post.isRepost ? 1 : 0,
+        post.originalAuthorName || null,
+        post.originalAuthorIdentifier || null,
+        JSON.stringify(post.hashtags || []),
+        JSON.stringify(post.mentions || []),
         post.postedAt,
         post.scrapedAt
       );

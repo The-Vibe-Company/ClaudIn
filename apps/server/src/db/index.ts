@@ -138,6 +138,7 @@ export function initDatabase(): Database.Database {
       
       content TEXT,
       post_url TEXT,
+      post_type TEXT DEFAULT 'text',
       
       likes_count INTEGER DEFAULT 0,
       comments_count INTEGER DEFAULT 0,
@@ -146,7 +147,19 @@ export function initDatabase(): Database.Database {
       has_image INTEGER DEFAULT 0,
       has_video INTEGER DEFAULT 0,
       has_document INTEGER DEFAULT 0,
+      has_link INTEGER DEFAULT 0,
+      has_poll INTEGER DEFAULT 0,
+      
       image_urls TEXT,
+      video_url TEXT,
+      shared_link TEXT,
+      
+      is_repost INTEGER DEFAULT 0,
+      original_author_name TEXT,
+      original_author_identifier TEXT,
+      
+      hashtags TEXT,
+      mentions TEXT,
       
       posted_at TEXT,
       scraped_at TEXT NOT NULL,
@@ -179,10 +192,33 @@ export function initDatabase(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_enrichment_status ON enrichment_queue(status);
   `);
 
+  migratePostsTable();
   cleanupDuplicatedText();
   
   console.log('Database initialized');
   return db;
+}
+
+function migratePostsTable() {
+  const newColumns = [
+    { name: 'post_type', type: 'TEXT DEFAULT \'text\'' },
+    { name: 'has_link', type: 'INTEGER DEFAULT 0' },
+    { name: 'has_poll', type: 'INTEGER DEFAULT 0' },
+    { name: 'video_url', type: 'TEXT' },
+    { name: 'shared_link', type: 'TEXT' },
+    { name: 'is_repost', type: 'INTEGER DEFAULT 0' },
+    { name: 'original_author_name', type: 'TEXT' },
+    { name: 'original_author_identifier', type: 'TEXT' },
+    { name: 'hashtags', type: 'TEXT' },
+    { name: 'mentions', type: 'TEXT' },
+  ];
+  
+  for (const col of newColumns) {
+    try {
+      db.exec(`ALTER TABLE posts ADD COLUMN ${col.name} ${col.type}`);
+      console.log(`Added column posts.${col.name}`);
+    } catch {}
+  }
 }
 
 function cleanupDuplicatedText() {

@@ -85,13 +85,30 @@ export interface LinkedInConversation {
   scrapedAt: string;
 }
 
-/**
- * LinkedIn Post Types (Feed)
- */
+export type PostType = 
+  | 'text'
+  | 'image' 
+  | 'video'
+  | 'article'
+  | 'document'
+  | 'poll'
+  | 'event'
+  | 'job'
+  | 'celebration'
+  | 'repost'
+  | 'unknown';
+
+export interface SharedLink {
+  url: string;
+  title: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  domain: string | null;
+}
 
 export interface LinkedInPost {
   id: string;
-  authorProfileId: string; // FK to profile (the person who posted)
+  authorProfileId: string;
   authorPublicIdentifier: string;
   authorName: string;
   authorHeadline: string | null;
@@ -99,19 +116,30 @@ export interface LinkedInPost {
   
   content: string;
   postUrl: string | null;
+  postType: PostType;
   
-  // Engagement
   likesCount: number;
   commentsCount: number;
   repostsCount: number;
   
-  // Media
   hasImage: boolean;
   hasVideo: boolean;
   hasDocument: boolean;
-  imageUrls: string[];
+  hasLink: boolean;
+  hasPoll: boolean;
   
-  postedAt: string; // ISO date (approximated from "2h ago" etc)
+  imageUrls: string[];
+  videoUrl: string | null;
+  sharedLink: SharedLink | null;
+  
+  isRepost: boolean;
+  originalAuthorName: string | null;
+  originalAuthorIdentifier: string | null;
+  
+  hashtags: string[];
+  mentions: string[];
+  
+  postedAt: string;
   scrapedAt: string;
 }
 
