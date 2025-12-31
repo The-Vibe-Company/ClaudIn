@@ -158,6 +158,39 @@
       color: #666;
     }
     
+    .unsynced-section {
+      background: linear-gradient(135deg, #1a2a1a, #1a1a2a);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid #2a4a2a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .unsynced-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .unsynced-icon {
+      font-size: 14px;
+    }
+    
+    .unsynced-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #4ade80;
+    }
+    
+    .unsynced-count {
+      font-size: 12px;
+      color: #a0ffa0;
+      font-weight: 500;
+    }
+    
     .queue-section {
       background: #1a1a2e;
       border-radius: 8px;
@@ -260,6 +293,14 @@
     <div class="status-dot"></div>
     <span>Auto-sync every 5 min</span>
     <span class="status-time" id="lastServerSync"></span>
+  </div>
+  
+  <div class="unsynced-section" id="unsyncedSection" style="display: none;">
+    <div class="unsynced-header">
+      <span class="unsynced-icon">⬆</span>
+      <span class="unsynced-title">To sync</span>
+    </div>
+    <div class="unsynced-count" id="unsyncedCount">0 items</div>
   </div>
   
   <div class="queue-section" id="queueSection" style="display: none;">

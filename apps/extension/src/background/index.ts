@@ -22,6 +22,18 @@ interface FeedScrapeEvent extends ScrapeEvent {
   data: { posts: LinkedInPost[] };
 }
 
+interface SyncedProfile extends LinkedInProfile {
+  syncedAt: string | null;
+}
+
+interface SyncedMessage extends LinkedInMessage {
+  syncedAt: string | null;
+}
+
+interface SyncedPost extends LinkedInPost {
+  syncedAt: string | null;
+}
+
 const STORAGE_KEYS = {
   PROFILES: 'claudin_profiles',
   MESSAGES: 'claudin_messages',
@@ -41,116 +53,123 @@ const ENRICHMENT_CHECK_INTERVAL_MINUTES = 1;
 
 const SERVER_URL = 'http://localhost:3847/api';
 
-const profilesCache = new Map<string, LinkedInProfile>();
-const messagesCache = new Map<string, LinkedInMessage>();
-const postsCache = new Map<string, LinkedInPost>();
+const profilesCache = new Map<string, SyncedProfile>();
+const messagesCache = new Map<string, SyncedMessage>();
+const postsCache = new Map<string, SyncedPost>();
 
 async function initializeCache() {
   const data = await chrome.storage.local.get([STORAGE_KEYS.PROFILES, STORAGE_KEYS.MESSAGES, STORAGE_KEYS.POSTS]);
   
-  const profiles = data[STORAGE_KEYS.PROFILES] as Record<string, LinkedInProfile> | undefined;
+  const profiles = data[STORAGE_KEYS.PROFILES] as Record<string, SyncedProfile> | undefined;
   if (profiles) {
     Object.entries(profiles).forEach(([key, profile]) => {
-      profilesCache.set(key, profile);
+      profilesCache.set(key, { ...profile, syncedAt: profile.syncedAt ?? null });
     });
   }
   
-  const messages = data[STORAGE_KEYS.MESSAGES] as Record<string, LinkedInMessage> | undefined;
+  const messages = data[STORAGE_KEYS.MESSAGES] as Record<string, SyncedMessage> | undefined;
   if (messages) {
     Object.entries(messages).forEach(([key, msg]) => {
-      messagesCache.set(key, msg);
+      messagesCache.set(key, { ...msg, syncedAt: msg.syncedAt ?? null });
     });
   }
   
-  const posts = data[STORAGE_KEYS.POSTS] as Record<string, LinkedInPost> | undefined;
+  const posts = data[STORAGE_KEYS.POSTS] as Record<string, SyncedPost> | undefined;
   if (posts) {
     Object.entries(posts).forEach(([key, post]) => {
-      postsCache.set(key, post);
+      postsCache.set(key, { ...post, syncedAt: post.syncedAt ?? null });
     });
   }
   
-  console.log(`[ClaudIn] Initialized with ${profilesCache.size} profiles, ${messagesCache.size} messages, ${postsCache.size} posts`);
+  const unsyncedProfiles = Array.from(profilesCache.values()).filter(p => !p.syncedAt).length;
+  const unsyncedMessages = Array.from(messagesCache.values()).filter(m => !m.syncedAt).length;
+  const unsyncedPosts = Array.from(postsCache.values()).filter(p => !p.syncedAt).length;
+  
+  console.log(`[ClaudIn] Initialized: ${profilesCache.size} profiles (${unsyncedProfiles} unsynced), ${messagesCache.size} messages (${unsyncedMessages} unsynced), ${postsCache.size} posts (${unsyncedPosts} unsynced)`);
 }
 
-// Save profile to storage
 async function saveProfile(profile: Partial<LinkedInProfile>) {
   if (!profile.publicIdentifier) return;
   
   const key = profile.publicIdentifier;
   const existing = profilesCache.get(key);
   
-  // Merge with existing data (don't overwrite full data with partial)
-  const merged: LinkedInProfile = {
+  const merged: SyncedProfile = {
     ...existing,
     ...profile,
-    // Keep detailed fields if we have them and new data is partial
     experience: profile.isPartial && existing?.experience ? existing.experience : profile.experience || null,
     education: profile.isPartial && existing?.education ? existing.education : profile.education || null,
     skills: profile.isPartial && existing?.skills ? existing.skills : profile.skills || null,
     about: profile.isPartial && existing?.about ? existing.about : profile.about || null,
-    // Always update these
     scrapedAt: profile.scrapedAt || new Date().toISOString(),
-  } as LinkedInProfile;
+    syncedAt: null,
+  } as SyncedProfile;
   
-  // Generate ID if needed
   if (!merged.id) {
     merged.id = `profile_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   }
   
   profilesCache.set(key, merged);
   
-  // Persist to storage
-  const allProfiles: Record<string, LinkedInProfile> = {};
+  const allProfiles: Record<string, SyncedProfile> = {};
   profilesCache.forEach((p, k) => {
     allProfiles[k] = p;
   });
   
   await chrome.storage.local.set({ [STORAGE_KEYS.PROFILES]: allProfiles });
-  
-  // Update stats
   await updateStats();
   
   return merged;
 }
 
 async function updateStats() {
+  const unsyncedProfiles = Array.from(profilesCache.values()).filter(p => !p.syncedAt).length;
+  const unsyncedMessages = Array.from(messagesCache.values()).filter(m => !m.syncedAt).length;
+  const unsyncedPosts = Array.from(postsCache.values()).filter(p => !p.syncedAt).length;
+  const totalUnsynced = unsyncedProfiles + unsyncedMessages + unsyncedPosts;
+  
   const stats = {
     totalProfiles: profilesCache.size,
     totalMessages: messagesCache.size,
     totalPosts: postsCache.size,
+    unsyncedProfiles,
+    unsyncedMessages,
+    unsyncedPosts,
     lastSyncAt: new Date().toISOString(),
   };
   
   await chrome.storage.local.set({ [STORAGE_KEYS.STATS]: stats });
   
-  chrome.action.setBadgeText({ text: stats.totalProfiles.toString() });
-  chrome.action.setBadgeBackgroundColor({ color: '#0A66C2' });
+  chrome.action.setBadgeText({ text: totalUnsynced > 0 ? totalUnsynced.toString() : '' });
+  chrome.action.setBadgeBackgroundColor({ color: totalUnsynced > 0 ? '#ef4444' : '#0A66C2' });
 }
 
 async function saveMessage(message: LinkedInMessage) {
-  messagesCache.set(message.id, message);
+  const syncedMessage: SyncedMessage = { ...message, syncedAt: null };
+  messagesCache.set(message.id, syncedMessage);
   
-  const allMessages: Record<string, LinkedInMessage> = {};
+  const allMessages: Record<string, SyncedMessage> = {};
   messagesCache.forEach((m, k) => {
     allMessages[k] = m;
   });
   
   await chrome.storage.local.set({ [STORAGE_KEYS.MESSAGES]: allMessages });
   await updateStats();
-  return message;
+  return syncedMessage;
 }
 
 async function savePost(post: LinkedInPost) {
-  postsCache.set(post.id, post);
+  const syncedPost: SyncedPost = { ...post, syncedAt: null };
+  postsCache.set(post.id, syncedPost);
   
-  const allPosts: Record<string, LinkedInPost> = {};
+  const allPosts: Record<string, SyncedPost> = {};
   postsCache.forEach((p, k) => {
     allPosts[k] = p;
   });
   
   await chrome.storage.local.set({ [STORAGE_KEYS.POSTS]: allPosts });
   await updateStats();
-  return post;
+  return syncedPost;
 }
 
 chrome.runtime.onMessage.addListener((message: ScrapeEvent | MessagesScrapeEvent | FeedScrapeEvent, _sender, _sendResponse) => {
@@ -381,67 +400,124 @@ chrome.runtime.onStartup.addListener(() => {
 
 async function syncToServer(): Promise<{ success: boolean; profiles?: number; messages?: number; posts?: number; error?: string }> {
   try {
-    const profiles = Array.from(profilesCache.values());
-    const messages = Array.from(messagesCache.values());
-    const posts = Array.from(postsCache.values());
+    const unsyncedProfiles = Array.from(profilesCache.values()).filter(p => !p.syncedAt);
+    const unsyncedMessages = Array.from(messagesCache.values()).filter(m => !m.syncedAt);
+    const unsyncedPosts = Array.from(postsCache.values()).filter(p => !p.syncedAt);
     
-    let profilesSaved = 0;
-    let messagesSaved = 0;
-    let postsSaved = 0;
+    console.log(`[ClaudIn] Syncing: ${unsyncedProfiles.length} profiles, ${unsyncedMessages.length} messages, ${unsyncedPosts.length} posts`);
     
-    if (profiles.length > 0) {
+    let profilesSynced = 0;
+    let messagesSynced = 0;
+    let postsSynced = 0;
+    const now = new Date().toISOString();
+    
+    if (unsyncedProfiles.length > 0) {
       const res = await fetch(`${SERVER_URL}/sync/profiles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profiles }),
+        body: JSON.stringify({ profiles: unsyncedProfiles }),
       });
       if (res.ok) {
-        const result = await res.json();
-        profilesSaved = result.saved;
+        const result = await res.json() as { saved: number; syncedIds?: string[] };
+        profilesSynced = result.saved;
+        
+        const syncedIds = result.syncedIds || unsyncedProfiles.map(p => p.publicIdentifier);
+        for (const id of syncedIds) {
+          const profile = profilesCache.get(id);
+          if (profile) {
+            profile.syncedAt = now;
+            profilesCache.set(id, profile);
+          }
+        }
       }
     }
     
-    if (messages.length > 0) {
+    if (unsyncedMessages.length > 0) {
       const res = await fetch(`${SERVER_URL}/sync/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({ messages: unsyncedMessages }),
       });
       if (res.ok) {
-        const result = await res.json();
-        messagesSaved = result.saved;
+        const result = await res.json() as { saved: number; syncedIds?: string[] };
+        messagesSynced = result.saved;
+        
+        const syncedIds = result.syncedIds || unsyncedMessages.map(m => m.id);
+        for (const id of syncedIds) {
+          const msg = messagesCache.get(id);
+          if (msg) {
+            msg.syncedAt = now;
+            messagesCache.set(id, msg);
+          }
+        }
       }
     }
     
-    if (posts.length > 0) {
+    if (unsyncedPosts.length > 0) {
       const res = await fetch(`${SERVER_URL}/sync/posts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posts }),
+        body: JSON.stringify({ posts: unsyncedPosts }),
       });
       if (res.ok) {
-        const result = await res.json();
-        postsSaved = result.saved;
+        const result = await res.json() as { saved: number; syncedIds?: string[] };
+        postsSynced = result.saved;
+        
+        const syncedIds = result.syncedIds || unsyncedPosts.map(p => p.id);
+        for (const id of syncedIds) {
+          const post = postsCache.get(id);
+          if (post) {
+            post.syncedAt = now;
+            postsCache.set(id, post);
+          }
+        }
       }
     }
     
-    console.log(`[ClaudIn] Synced ${profilesSaved} profiles, ${messagesSaved} messages, ${postsSaved} posts`);
+    await persistAllCaches();
+    
+    const totalUnsynced = 
+      Array.from(profilesCache.values()).filter(p => !p.syncedAt).length +
+      Array.from(messagesCache.values()).filter(m => !m.syncedAt).length +
+      Array.from(postsCache.values()).filter(p => !p.syncedAt).length;
+    
+    console.log(`[ClaudIn] Synced ${profilesSynced} profiles, ${messagesSynced} messages, ${postsSynced} posts. Remaining unsynced: ${totalUnsynced}`);
     
     await chrome.storage.local.set({
       [STORAGE_KEYS.STATS]: {
         totalProfiles: profilesCache.size,
         totalMessages: messagesCache.size,
         totalPosts: postsCache.size,
+        unsyncedProfiles: Array.from(profilesCache.values()).filter(p => !p.syncedAt).length,
+        unsyncedMessages: Array.from(messagesCache.values()).filter(m => !m.syncedAt).length,
+        unsyncedPosts: Array.from(postsCache.values()).filter(p => !p.syncedAt).length,
         lastSyncAt: new Date().toISOString(),
         lastServerSync: new Date().toISOString(),
       }
     });
     
-    return { success: true, profiles: profilesSaved, messages: messagesSaved, posts: postsSaved };
+    return { success: true, profiles: profilesSynced, messages: messagesSynced, posts: postsSynced };
   } catch (error) {
     console.error('[ClaudIn] Sync failed:', error);
     return { success: false, error: String(error) };
   }
+}
+
+async function persistAllCaches() {
+  const allProfiles: Record<string, SyncedProfile> = {};
+  profilesCache.forEach((p, k) => { allProfiles[k] = p; });
+  
+  const allMessages: Record<string, SyncedMessage> = {};
+  messagesCache.forEach((m, k) => { allMessages[k] = m; });
+  
+  const allPosts: Record<string, SyncedPost> = {};
+  postsCache.forEach((p, k) => { allPosts[k] = p; });
+  
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.PROFILES]: allProfiles,
+    [STORAGE_KEYS.MESSAGES]: allMessages,
+    [STORAGE_KEYS.POSTS]: allPosts,
+  });
 }
 
 initializeCache();

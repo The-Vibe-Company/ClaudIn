@@ -24,7 +24,6 @@ function deduplicateText(text: string | null | undefined): string {
 
 export const syncRouter = new Hono();
 
-// Receive profiles from extension
 syncRouter.post('/profiles', async (c) => {
   const { profiles } = await c.req.json() as { profiles: Partial<LinkedInProfile>[] };
   
@@ -33,12 +32,16 @@ syncRouter.post('/profiles', async (c) => {
   }
   
   let saved = 0;
+  const syncedIds: string[] = [];
+  
   for (const profile of profiles) {
     const result = upsertProfile(profile);
-    if (result) saved++;
+    if (result && profile.publicIdentifier) {
+      saved++;
+      syncedIds.push(profile.publicIdentifier);
+    }
   }
   
-  // Log sync
   const db = getDb();
   db.prepare(`
     INSERT INTO sync_log (type, count, synced_at)
@@ -49,6 +52,7 @@ syncRouter.post('/profiles', async (c) => {
     success: true,
     saved,
     total: profiles.length,
+    syncedIds,
   });
 });
 
@@ -116,6 +120,7 @@ syncRouter.post('/messages', async (c) => {
   const db = getDb();
   let saved = 0;
   let profilesCreated = 0;
+  const syncedIds: string[] = [];
   
   for (const msg of messages) {
     if (msg.profileId) {
@@ -158,6 +163,7 @@ syncRouter.post('/messages', async (c) => {
         msg.scrapedAt
       );
       saved++;
+      syncedIds.push(msg.id);
     } catch (e) {
       console.error('Failed to save message:', e);
     }
@@ -168,7 +174,7 @@ syncRouter.post('/messages', async (c) => {
     VALUES (?, ?, ?)
   `).run('messages', saved, new Date().toISOString());
   
-  return c.json({ success: true, saved, total: messages.length, profilesCreated });
+  return c.json({ success: true, saved, total: messages.length, profilesCreated, syncedIds });
 });
 
 syncRouter.post('/posts', async (c) => {
@@ -181,6 +187,7 @@ syncRouter.post('/posts', async (c) => {
   const db = getDb();
   let saved = 0;
   let profilesCreated = 0;
+  const syncedIds: string[] = [];
   
   for (const post of posts) {
     const cleanName = deduplicateText(post.authorName);
@@ -242,6 +249,7 @@ syncRouter.post('/posts', async (c) => {
         post.scrapedAt
       );
       saved++;
+      syncedIds.push(post.id);
     } catch (e) {
       console.error('Failed to save post:', e);
     }
@@ -252,5 +260,5 @@ syncRouter.post('/posts', async (c) => {
     VALUES (?, ?, ?)
   `).run('posts', saved, new Date().toISOString());
   
-  return c.json({ success: true, saved, total: posts.length, profilesCreated });
+  return c.json({ success: true, saved, total: posts.length, profilesCreated, syncedIds });
 });

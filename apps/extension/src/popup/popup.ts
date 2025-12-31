@@ -1,26 +1,66 @@
 const SERVER_URL = 'http://localhost:3847/api';
 
+interface SyncedItem {
+  syncedAt: string | null;
+}
+
 async function updateStats() {
   const data = await chrome.storage.local.get(['claudin_profiles', 'claudin_messages', 'claudin_posts', 'claudin_stats']);
   
-  const profiles = data.claudin_profiles as Record<string, unknown> | undefined;
-  const messages = data.claudin_messages as Record<string, unknown> | undefined;
-  const posts = data.claudin_posts as Record<string, unknown> | undefined;
-  const stats = data.claudin_stats as { lastSyncAt?: string; lastServerSync?: string } | undefined;
+  const profiles = data.claudin_profiles as Record<string, SyncedItem> | undefined;
+  const messages = data.claudin_messages as Record<string, SyncedItem> | undefined;
+  const posts = data.claudin_posts as Record<string, SyncedItem> | undefined;
+  const stats = data.claudin_stats as { 
+    lastSyncAt?: string; 
+    lastServerSync?: string;
+    unsyncedProfiles?: number;
+    unsyncedMessages?: number;
+    unsyncedPosts?: number;
+  } | undefined;
   
   const profileCount = profiles ? Object.keys(profiles).length : 0;
   const messageCount = messages ? Object.keys(messages).length : 0;
   const postCount = posts ? Object.keys(posts).length : 0;
+  
+  const unsyncedProfiles = profiles 
+    ? Object.values(profiles).filter(p => !p.syncedAt).length 
+    : 0;
+  const unsyncedMessages = messages 
+    ? Object.values(messages).filter(m => !m.syncedAt).length 
+    : 0;
+  const unsyncedPosts = posts 
+    ? Object.values(posts).filter(p => !p.syncedAt).length 
+    : 0;
   
   const profileCountEl = document.getElementById('profileCount');
   const messageCountEl = document.getElementById('messageCount');
   const postCountEl = document.getElementById('postCount');
   const lastSyncEl = document.getElementById('lastSync');
   const lastServerSyncEl = document.getElementById('lastServerSync');
+  const unsyncedSection = document.getElementById('unsyncedSection');
+  const unsyncedCount = document.getElementById('unsyncedCount');
   
   if (profileCountEl) profileCountEl.textContent = profileCount.toString();
   if (messageCountEl) messageCountEl.textContent = messageCount.toString();
   if (postCountEl) postCountEl.textContent = postCount.toString();
+  
+  const totalUnsynced = unsyncedProfiles + unsyncedMessages + unsyncedPosts;
+  
+  if (unsyncedSection && unsyncedCount) {
+    if (totalUnsynced > 0) {
+      unsyncedSection.style.display = 'block';
+      const parts: string[] = [];
+      if (unsyncedProfiles > 0) parts.push(`${unsyncedProfiles} profile${unsyncedProfiles > 1 ? 's' : ''}`);
+      if (unsyncedMessages > 0) parts.push(`${unsyncedMessages} message${unsyncedMessages > 1 ? 's' : ''}`);
+      if (unsyncedPosts > 0) parts.push(`${unsyncedPosts} post${unsyncedPosts > 1 ? 's' : ''}`);
+      unsyncedCount.textContent = parts.join(', ');
+    } else {
+      unsyncedSection.style.display = 'none';
+    }
+  }
+  
+  chrome.action.setBadgeText({ text: totalUnsynced > 0 ? totalUnsynced.toString() : '' });
+  chrome.action.setBadgeBackgroundColor({ color: totalUnsynced > 0 ? '#ef4444' : '#0A66C2' });
   
   if (lastSyncEl && stats?.lastSyncAt) {
     lastSyncEl.textContent = formatTimeAgo(stats.lastSyncAt);
@@ -95,19 +135,26 @@ async function syncToServer() {
       if (response.profiles) parts.push(`${response.profiles} profiles`);
       if (response.messages) parts.push(`${response.messages} messages`);
       if (response.posts) parts.push(`${response.posts} posts`);
-      syncResult.textContent = parts.length ? `Synced ${parts.join(', ')}` : 'Nothing to sync';
-      syncResult.className = 'sync-result success';
+      
+      if (parts.length) {
+        syncResult.textContent = `✓ Synced ${parts.join(', ')}`;
+        syncResult.className = 'sync-result success';
+      } else {
+        syncResult.textContent = '✓ Everything is already synced';
+        syncResult.className = 'sync-result success';
+      }
     } else {
-      syncResult.textContent = `Sync failed: ${response.error || 'Unknown error'}`;
+      syncResult.textContent = `✗ Sync failed: ${response.error || 'Server not reachable'}`;
       syncResult.className = 'sync-result error';
     }
   } catch (error) {
-    syncResult.textContent = `Error: ${error}`;
+    syncResult.textContent = `✗ Error: ${error}`;
     syncResult.className = 'sync-result error';
   } finally {
     syncBtn.disabled = false;
-    syncBtn.textContent = 'Sync to Desktop App';
+    syncBtn.textContent = 'Sync Now';
     syncBtn.classList.remove('syncing');
+    await updateStats();
   }
 }
 
