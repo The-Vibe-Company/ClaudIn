@@ -4,9 +4,15 @@
  */
 
 import { Hono } from 'hono';
-import { getDb } from '../db/index.js';
+import { getDb, withTransaction } from '../db/index.js';
 import { upsertProfile } from '../db/profiles.js';
 import type { LinkedInProfile, LinkedInMessage, LinkedInPost } from '@claudin/shared';
+
+interface SyncResult<T = string> {
+  saved: number;
+  failed: Array<{ id: T; error: string }>;
+  syncedIds: T[];
+}
 
 function deduplicateText(text: string | null | undefined): string {
   if (!text) return '';
@@ -26,33 +32,51 @@ export const syncRouter = new Hono();
 
 syncRouter.post('/profiles', async (c) => {
   const { profiles } = await c.req.json() as { profiles: Partial<LinkedInProfile>[] };
-  
+
   if (!Array.isArray(profiles)) {
     return c.json({ error: 'profiles must be an array' }, 400);
   }
-  
-  let saved = 0;
-  const syncedIds: string[] = [];
-  
-  for (const profile of profiles) {
-    const result = upsertProfile(profile);
-    if (result && profile.publicIdentifier) {
-      saved++;
-      syncedIds.push(profile.publicIdentifier);
+
+  // Process all profiles within a transaction for atomicity
+  const result = withTransaction((): SyncResult => {
+    const syncResult: SyncResult = { saved: 0, failed: [], syncedIds: [] };
+
+    for (const profile of profiles) {
+      if (!profile.publicIdentifier) {
+        syncResult.failed.push({ id: 'unknown', error: 'Missing publicIdentifier' });
+        continue;
+      }
+
+      try {
+        const saved = upsertProfile(profile);
+        if (saved) {
+          syncResult.saved++;
+          syncResult.syncedIds.push(profile.publicIdentifier);
+        }
+      } catch (e) {
+        syncResult.failed.push({
+          id: profile.publicIdentifier,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
     }
-  }
-  
-  const db = getDb();
-  db.prepare(`
-    INSERT INTO sync_log (type, count, synced_at)
-    VALUES (?, ?, ?)
-  `).run('profiles', saved, new Date().toISOString());
-  
+
+    // Log sync operation
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO sync_log (type, count, synced_at)
+      VALUES (?, ?, ?)
+    `).run('profiles', syncResult.saved, new Date().toISOString());
+
+    return syncResult;
+  });
+
   return c.json({
     success: true,
-    saved,
+    saved: result.saved,
     total: profiles.length,
-    syncedIds,
+    syncedIds: result.syncedIds,
+    failed: result.failed.length > 0 ? result.failed : undefined,
   });
 });
 

@@ -21,6 +21,23 @@ export function getDb(): Database.Database {
   return db;
 }
 
+/**
+ * Execute a function within a database transaction.
+ * Automatically commits on success, rolls back on error.
+ */
+export function withTransaction<T>(fn: () => T): T {
+  const transaction = getDb().transaction(fn);
+  return transaction();
+}
+
+/**
+ * Execute a function within a database transaction (async version).
+ * Note: The callback should be synchronous; async operations should complete before returning.
+ */
+export function withTransactionSync<T>(fn: () => T): T {
+  return withTransaction(fn);
+}
+
 export function initDatabase(): Database.Database {
   // Ensure data directory exists
   if (!existsSync(DATA_DIR)) {
@@ -192,11 +209,40 @@ export function initDatabase(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_enrichment_status ON enrichment_queue(status);
   `);
 
-  migratePostsTable();
-  cleanupDuplicatedText();
-  
+  // Run versioned migrations
+  runMigrations();
+
   console.log('Database initialized');
   return db;
+}
+
+/**
+ * Run database migrations based on version tracking.
+ * Each migration runs only once.
+ */
+function runMigrations() {
+  const currentVersion = parseInt(getSetting('db_version') || '0', 10);
+  let newVersion = currentVersion;
+
+  // Migration 1: Add new columns to posts table
+  if (currentVersion < 1) {
+    migratePostsTable();
+    newVersion = 1;
+    console.log('Migration 1: Posts table updated');
+  }
+
+  // Migration 2: Cleanup duplicated text (one-time fix)
+  if (currentVersion < 2) {
+    cleanupDuplicatedText();
+    newVersion = 2;
+    console.log('Migration 2: Duplicated text cleaned');
+  }
+
+  // Save new version if migrations ran
+  if (newVersion > currentVersion) {
+    setSetting('db_version', String(newVersion));
+    console.log(`Database migrated from v${currentVersion} to v${newVersion}`);
+  }
 }
 
 function migratePostsTable() {
