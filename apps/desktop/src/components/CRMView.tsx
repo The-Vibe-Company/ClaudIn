@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, 
-  MapPin, 
-  MessageSquare, 
+import {
+  Search,
+  MapPin,
+  MessageSquare,
   Calendar,
   ArrowUpRight,
   ArrowDownLeft,
@@ -13,17 +13,23 @@ import {
   ExternalLink,
   AlertCircle,
   Briefcase,
-  RefreshCw
+  RefreshCw,
+  CheckCircle,
+  Download
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
 import { fetchCRMProfiles, queueProfileEnrichment } from '../lib/api';
 import { useAppStore } from '../store/app';
 import type { CRMProfile } from '../lib/api';
+import { ProfileCardSkeletonList } from './Skeleton';
+import { exportProfiles, type ExportFormat } from '../lib/export';
 
 export function CRMView() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  
+  const [isExporting, setIsExporting] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
@@ -36,6 +42,23 @@ export function CRMView() {
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleExport = async (format: ExportFormat) => {
+    if (!data?.profiles || isExporting) return;
+    setIsExporting(true);
+    setShowExportMenu(false);
+
+    try {
+      const result = await exportProfiles(data.profiles, { format });
+      if (result.success) {
+        console.log('Exported to:', result.path);
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-bg-primary">
@@ -60,27 +83,72 @@ export function CRMView() {
           </div>
         </div>
 
-        <div className="relative w-72 group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-focus-within:text-accent-primary transition-colors" />
-          <input
-            type="text"
-            placeholder="Search network..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-bg-secondary border border-border-subtle 
-                     text-sm text-text-primary placeholder:text-text-muted
-                     focus:outline-none focus:ring-2 focus:ring-accent-primary/20 focus:border-accent-primary
-                     transition-all shadow-sm"
-          />
+        <div className="flex items-center gap-3">
+          {/* Export button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              disabled={!data?.profiles?.length || isExporting}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-bg-secondary border border-border-subtle
+                       text-sm text-text-secondary hover:text-text-primary hover:border-accent-primary/30
+                       disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {isExporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              Export
+            </button>
+
+            <AnimatePresence>
+              {showExportMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowExportMenu(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                    className="absolute right-0 top-full mt-2 w-36 bg-bg-elevated border border-border-subtle rounded-xl shadow-xl z-50 overflow-hidden"
+                  >
+                    <button
+                      onClick={() => handleExport('csv')}
+                      className="w-full px-4 py-2.5 text-sm text-left text-text-primary hover:bg-bg-tertiary transition-colors"
+                    >
+                      Export as CSV
+                    </button>
+                    <button
+                      onClick={() => handleExport('json')}
+                      className="w-full px-4 py-2.5 text-sm text-left text-text-primary hover:bg-bg-tertiary transition-colors"
+                    >
+                      Export as JSON
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Search input */}
+          <div className="relative w-72 group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-focus-within:text-accent-primary transition-colors" />
+            <input
+              type="text"
+              placeholder="Search network..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-bg-secondary border border-border-subtle
+                       text-sm text-text-primary placeholder:text-text-muted
+                       focus:outline-none focus:ring-2 focus:ring-accent-primary/20 focus:border-accent-primary
+                       transition-all shadow-sm"
+            />
+          </div>
         </div>
       </div>
 
       <div ref={containerRef} className="flex-1 overflow-y-auto p-6 scrollbar-hidden">
         {isLoading && !data ? (
-          <div className="flex items-center justify-center h-full text-text-muted gap-2">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Loading network...</span>
-          </div>
+          <ProfileCardSkeletonList count={6} />
         ) : isError ? (
           <div className="flex items-center justify-center h-full text-red-400 gap-2">
             <AlertCircle className="w-5 h-5" />
@@ -204,29 +272,36 @@ function ProfileCard({ profile, index }: { profile: CRMProfile; index: number })
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-200">
+            <div className="flex items-center gap-2">
+              {/* Sync button - always visible for partial profiles */}
               {isPartial && !syncQueued && (
                 <button
                   onClick={handleSync}
                   disabled={isSyncing}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
-                             bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
+                             bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 disabled:opacity-50
+                             border border-amber-500/20 hover:border-amber-500/40 transition-all"
                 >
                   {isSyncing ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
                   ) : (
                     <RefreshCw className="w-3 h-3" />
                   )}
-                  <span>Sync</span>
+                  <span>Sync Profile</span>
                 </button>
               )}
               {syncQueued && (
-                <span className="text-xs text-green-500 px-2">Queued!</span>
+                <span className="flex items-center gap-1.5 text-xs text-green-500 px-2 py-1 bg-green-500/10 rounded-full border border-green-500/20">
+                  <CheckCircle className="w-3 h-3" />
+                  Queued
+                </span>
               )}
+              {/* LinkedIn button - only visible on hover */}
               <button
                 onClick={openLinkedIn}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium 
-                           bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
+                           bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20
+                           opacity-0 group-hover:opacity-100 transition-all duration-200"
               >
                 <ExternalLink className="w-3 h-3" />
               </button>

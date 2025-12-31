@@ -1,20 +1,25 @@
-import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  MessageSquare, 
-  Plus, 
-  Settings, 
-  Sparkles, 
-  Users, 
-  Newspaper, 
-  ChevronDown, 
+import {
+  MessageSquare,
+  Plus,
+  Settings,
+  Sparkles,
+  Users,
+  Newspaper,
+  ChevronDown,
   ChevronRight,
   Activity,
-  Terminal
+  Terminal,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  X,
+  Check
 } from 'lucide-react';
 import { useAppStore } from '../store/app';
-import { fetchConversations, fetchStats } from '../lib/api';
+import { fetchConversations, fetchStats, renameConversation, deleteConversation } from '../lib/api';
 import { EnrichmentPanel } from './EnrichmentPanel';
 import type { ChatConversation } from '@claudin/shared';
 
@@ -163,26 +168,14 @@ export function Sidebar() {
 
                 <div className="mt-2 space-y-0.5">
                   {conversations.map((conversation) => (
-                    <button
+                    <ConversationItem
                       key={conversation.id}
-                      onClick={() => handleSelectConversation(conversation.id)}
-                      className={`
-                        w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors
-                        ${activeView === 'chat' && activeConversationId === conversation.id
-                          ? 'bg-bg-elevated text-text-primary border border-border-subtle/50'
-                          : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
-                        }
-                      `}
-                    >
-                      <span className="truncate flex-1 text-xs">
-                        {conversation.title || 'New Chat'}
-                      </span>
-                      {activeView === 'chat' && activeConversationId === conversation.id && (
-                        <motion.div layoutId="active-indicator" className="w-1.5 h-1.5 rounded-full bg-accent-primary" />
-                      )}
-                    </button>
+                      conversation={conversation}
+                      isActive={activeView === 'chat' && activeConversationId === conversation.id}
+                      onSelect={() => handleSelectConversation(conversation.id)}
+                    />
                   ))}
-                  
+
                   {conversations.length === 0 && (
                     <div className="px-3 py-4 text-center">
                       <p className="text-xs text-text-muted">No history yet</p>
@@ -206,7 +199,7 @@ export function Sidebar() {
         </button>
         <button
           onClick={() => setSettingsOpen(true)}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary 
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-secondary
                      hover:bg-bg-tertiary hover:text-text-primary transition-all text-sm group"
         >
           <Settings className="w-4 h-4 group-hover:rotate-45 transition-transform" />
@@ -214,5 +207,182 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+  );
+}
+
+interface ConversationItemProps {
+  conversation: ChatConversation & { messages?: unknown[] };
+  isActive: boolean;
+  onSelect: () => void;
+}
+
+function ConversationItem({ conversation, isActive, onSelect }: ConversationItemProps) {
+  const queryClient = useQueryClient();
+  const { setActiveConversation, removeConversation } = useAppStore();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newTitle, setNewTitle] = useState(conversation.title || '');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  const handleRename = async () => {
+    if (!newTitle.trim()) {
+      setIsRenaming(false);
+      setNewTitle(conversation.title || '');
+      return;
+    }
+
+    try {
+      await renameConversation(conversation.id, newTitle.trim());
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      setIsRenaming(false);
+    } catch (err) {
+      console.error('Failed to rename conversation:', err);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+
+    try {
+      await deleteConversation(conversation.id);
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      removeConversation(conversation.id);
+      setActiveConversation(null);
+    } catch (err) {
+      console.error('Failed to delete conversation:', err);
+    } finally {
+      setIsDeleting(false);
+      setMenuOpen(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleRename();
+    } else if (e.key === 'Escape') {
+      setIsRenaming(false);
+      setNewTitle(conversation.title || '');
+    }
+  };
+
+  if (isRenaming) {
+    return (
+      <div className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-bg-elevated border border-border-subtle">
+        <input
+          ref={inputRef}
+          type="text"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleRename}
+          className="flex-1 bg-transparent text-xs text-text-primary outline-none"
+          placeholder="Conversation name..."
+        />
+        <button
+          onClick={handleRename}
+          className="p-1 rounded hover:bg-bg-tertiary text-green-500"
+        >
+          <Check className="w-3 h-3" />
+        </button>
+        <button
+          onClick={() => {
+            setIsRenaming(false);
+            setNewTitle(conversation.title || '');
+          }}
+          className="p-1 rounded hover:bg-bg-tertiary text-text-muted"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative group">
+      <button
+        onClick={onSelect}
+        className={`
+          w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors
+          ${isActive
+            ? 'bg-bg-elevated text-text-primary border border-border-subtle/50'
+            : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+          }
+        `}
+      >
+        <span className="truncate flex-1 text-xs">
+          {conversation.title || 'New Chat'}
+        </span>
+        {isActive && (
+          <motion.div layoutId="active-indicator" className="w-1.5 h-1.5 rounded-full bg-accent-primary" />
+        )}
+      </button>
+
+      {/* Context menu button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setMenuOpen(!menuOpen);
+        }}
+        className={`
+          absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-bg-tertiary
+          ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+          transition-opacity
+        `}
+      >
+        <MoreHorizontal className="w-3 h-3 text-text-muted" />
+      </button>
+
+      {/* Dropdown menu */}
+      <AnimatePresence>
+        {menuOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setMenuOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -5 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -5 }}
+              className="absolute right-0 top-full mt-1 w-36 bg-bg-elevated border border-border-subtle rounded-lg shadow-xl z-50 overflow-hidden"
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  setNewTitle(conversation.title || '');
+                  setIsRenaming(true);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-bg-tertiary transition-colors"
+              >
+                <Pencil className="w-3 h-3" />
+                Rename
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete();
+                }}
+                disabled={isDeleting}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+              >
+                <Trash2 className="w-3 h-3" />
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

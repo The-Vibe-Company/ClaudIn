@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, 
+import {
+  Search,
   Newspaper,
   ThumbsUp,
   MessageCircle,
@@ -10,13 +10,14 @@ import {
   Video,
   FileText,
   ExternalLink,
-  Loader2,
   Calendar,
-  Maximize2
+  Maximize2,
+  AlertCircle
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
 import { fetchPosts } from '../lib/api';
 import type { Post } from '../lib/api';
+import { PostCardSkeletonList } from './Skeleton';
 
 export function PostsView() {
   const [search, setSearch] = useState('');
@@ -67,12 +68,10 @@ export function PostsView() {
 
       <div ref={containerRef} className="flex-1 overflow-y-auto p-6 scrollbar-hidden">
         {isLoading && !data ? (
-          <div className="flex items-center justify-center h-full text-text-muted gap-2">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Loading posts...</span>
-          </div>
+          <PostCardSkeletonList count={4} />
         ) : isError ? (
           <div className="flex items-center justify-center h-full text-red-400 gap-2">
+            <AlertCircle className="w-5 h-5" />
             <span>Failed to load posts. Please try again.</span>
           </div>
         ) : data?.posts.length === 0 ? (

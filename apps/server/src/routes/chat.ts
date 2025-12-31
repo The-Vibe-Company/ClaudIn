@@ -59,18 +59,61 @@ chatRouter.get('/conversations/:id', (c) => {
 chatRouter.post('/conversations', async (c) => {
   const { title } = await c.req.json();
   const db = getDb();
-  
+
   const id = generateId('conv');
   const now = new Date().toISOString();
-  
+
   db.prepare(`
     INSERT INTO chat_conversations (id, title, created_at, updated_at)
     VALUES (?, ?, ?, ?)
   `).run(id, title || null, now, now);
-  
+
   return c.json({
     conversation: { id, title, createdAt: now, updatedAt: now },
   });
+});
+
+// Update conversation (rename)
+chatRouter.patch('/conversations/:id', async (c) => {
+  const id = c.req.param('id');
+  const { title } = await c.req.json();
+  const db = getDb();
+
+  const conversation = db.prepare(
+    'SELECT * FROM chat_conversations WHERE id = ?'
+  ).get(id);
+
+  if (!conversation) {
+    return c.json({ error: 'Conversation not found' }, 404);
+  }
+
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE chat_conversations SET title = ?, updated_at = ? WHERE id = ?
+  `).run(title, now, id);
+
+  return c.json({ success: true, title });
+});
+
+// Delete conversation
+chatRouter.delete('/conversations/:id', async (c) => {
+  const id = c.req.param('id');
+  const db = getDb();
+
+  const conversation = db.prepare(
+    'SELECT * FROM chat_conversations WHERE id = ?'
+  ).get(id);
+
+  if (!conversation) {
+    return c.json({ error: 'Conversation not found' }, 404);
+  }
+
+  // Delete messages first (foreign key constraint)
+  db.prepare('DELETE FROM chat_messages WHERE conversation_id = ?').run(id);
+  // Delete conversation
+  db.prepare('DELETE FROM chat_conversations WHERE id = ?').run(id);
+
+  return c.json({ success: true });
 });
 
 // Send message (streaming response)

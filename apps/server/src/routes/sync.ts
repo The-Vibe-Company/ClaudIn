@@ -136,176 +136,226 @@ syncRouter.post('/full', async (c) => {
 
 syncRouter.post('/messages', async (c) => {
   const { messages } = await c.req.json() as { messages: LinkedInMessage[] };
-  
+
   if (!Array.isArray(messages)) {
     return c.json({ error: 'messages must be an array' }, 400);
   }
-  
-  const db = getDb();
-  let saved = 0;
-  let profilesCreated = 0;
-  const syncedIds: string[] = [];
-  
-  for (const msg of messages) {
-    if (msg.profileId) {
-      const existing = db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(msg.profileId);
-      if (!existing) {
-        upsertProfile({
-          publicIdentifier: msg.profileId,
-          linkedinUrl: `https://www.linkedin.com/in/${msg.profileId}`,
-          firstName: '',
-          lastName: '',
-          fullName: msg.profileId,
-          headline: '',
-          scrapedAt: new Date().toISOString(),
-          isPartial: true,
+
+  // Process all messages within a transaction for atomicity
+  const result = withTransaction(() => {
+    const db = getDb();
+    const syncResult: SyncResult & { profilesCreated: number } = {
+      saved: 0,
+      failed: [],
+      syncedIds: [],
+      profilesCreated: 0,
+    };
+
+    for (const msg of messages) {
+      // Create stub profile if needed
+      if (msg.profileId) {
+        const existing = db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(msg.profileId);
+        if (!existing) {
+          try {
+            upsertProfile({
+              publicIdentifier: msg.profileId,
+              linkedinUrl: `https://www.linkedin.com/in/${msg.profileId}`,
+              firstName: '',
+              lastName: '',
+              fullName: msg.profileId,
+              headline: '',
+              scrapedAt: new Date().toISOString(),
+              isPartial: true,
+            });
+            syncResult.profilesCreated++;
+          } catch (e) {
+            console.error(`Failed to create stub profile for ${msg.profileId}:`, e);
+          }
+        }
+      }
+
+      try {
+        const profileRow = msg.profileId
+          ? db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(msg.profileId) as { id: string } | undefined
+          : undefined;
+
+        db.prepare(`
+          INSERT INTO messages (id, conversation_id, profile_id, direction, content, sent_at, is_read, scraped_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            content = excluded.content,
+            is_read = excluded.is_read,
+            scraped_at = excluded.scraped_at
+        `).run(
+          msg.id,
+          msg.conversationId,
+          profileRow?.id || msg.profileId,
+          msg.direction,
+          msg.content,
+          msg.sentAt,
+          msg.isRead ? 1 : 0,
+          msg.scrapedAt
+        );
+        syncResult.saved++;
+        syncResult.syncedIds.push(msg.id);
+      } catch (e) {
+        console.error('Failed to save message:', e);
+        syncResult.failed.push({
+          id: msg.id,
+          error: e instanceof Error ? e.message : String(e),
         });
-        profilesCreated++;
       }
     }
-    
-    try {
-      const profileRow = msg.profileId 
-        ? db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(msg.profileId) as { id: string } | undefined
-        : undefined;
-      
-      db.prepare(`
-        INSERT INTO messages (id, conversation_id, profile_id, direction, content, sent_at, is_read, scraped_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          content = excluded.content,
-          is_read = excluded.is_read,
-          scraped_at = excluded.scraped_at
-      `).run(
-        msg.id,
-        msg.conversationId,
-        profileRow?.id || msg.profileId,
-        msg.direction,
-        msg.content,
-        msg.sentAt,
-        msg.isRead ? 1 : 0,
-        msg.scrapedAt
-      );
-      saved++;
-      syncedIds.push(msg.id);
-    } catch (e) {
-      console.error('Failed to save message:', e);
-    }
-  }
-  
-  db.prepare(`
-    INSERT INTO sync_log (type, count, synced_at)
-    VALUES (?, ?, ?)
-  `).run('messages', saved, new Date().toISOString());
-  
-  return c.json({ success: true, saved, total: messages.length, profilesCreated, syncedIds });
+
+    // Log sync operation
+    db.prepare(`
+      INSERT INTO sync_log (type, count, synced_at)
+      VALUES (?, ?, ?)
+    `).run('messages', syncResult.saved, new Date().toISOString());
+
+    return syncResult;
+  });
+
+  return c.json({
+    success: true,
+    saved: result.saved,
+    total: messages.length,
+    profilesCreated: result.profilesCreated,
+    syncedIds: result.syncedIds,
+    failed: result.failed.length > 0 ? result.failed : undefined,
+  });
 });
 
 syncRouter.post('/posts', async (c) => {
   const { posts } = await c.req.json() as { posts: LinkedInPost[] };
-  
+
   if (!Array.isArray(posts)) {
     return c.json({ error: 'posts must be an array' }, 400);
   }
-  
-  const db = getDb();
-  let saved = 0;
-  let profilesCreated = 0;
-  const syncedIds: string[] = [];
-  
-  for (const post of posts) {
-    const cleanName = deduplicateText(post.authorName);
-    const cleanHeadline = deduplicateText(post.authorHeadline);
-    
-    if (post.authorPublicIdentifier) {
-      const existing = db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(post.authorPublicIdentifier);
-      if (!existing) {
-        upsertProfile({
-          publicIdentifier: post.authorPublicIdentifier,
-          linkedinUrl: `https://www.linkedin.com/in/${post.authorPublicIdentifier}`,
-          firstName: cleanName.split(' ')[0] || '',
-          lastName: cleanName.split(' ').slice(1).join(' ') || '',
-          fullName: cleanName || post.authorPublicIdentifier,
-          headline: cleanHeadline,
-          profilePictureUrl: post.authorProfilePictureUrl,
-          scrapedAt: new Date().toISOString(),
-          isPartial: true,
+
+  // Process all posts within a transaction for atomicity
+  const result = withTransaction(() => {
+    const db = getDb();
+    const syncResult: SyncResult & { profilesCreated: number } = {
+      saved: 0,
+      failed: [],
+      syncedIds: [],
+      profilesCreated: 0,
+    };
+
+    for (const post of posts) {
+      const cleanName = deduplicateText(post.authorName);
+      const cleanHeadline = deduplicateText(post.authorHeadline);
+
+      // Create stub profile if needed
+      if (post.authorPublicIdentifier) {
+        const existing = db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(post.authorPublicIdentifier);
+        if (!existing) {
+          try {
+            upsertProfile({
+              publicIdentifier: post.authorPublicIdentifier,
+              linkedinUrl: `https://www.linkedin.com/in/${post.authorPublicIdentifier}`,
+              firstName: cleanName.split(' ')[0] || '',
+              lastName: cleanName.split(' ').slice(1).join(' ') || '',
+              fullName: cleanName || post.authorPublicIdentifier,
+              headline: cleanHeadline,
+              profilePictureUrl: post.authorProfilePictureUrl,
+              scrapedAt: new Date().toISOString(),
+              isPartial: true,
+            });
+            syncResult.profilesCreated++;
+          } catch (e) {
+            console.error(`Failed to create stub profile for ${post.authorPublicIdentifier}:`, e);
+          }
+        }
+      }
+
+      try {
+        const profileRow = post.authorPublicIdentifier
+          ? db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(post.authorPublicIdentifier) as { id: string } | undefined
+          : undefined;
+
+        db.prepare(`
+          INSERT INTO posts (
+            id, author_profile_id, author_public_identifier, author_name, author_headline,
+            author_profile_picture_url, content, post_url, post_type,
+            likes_count, comments_count, reposts_count,
+            has_image, has_video, has_document, has_link, has_poll,
+            image_urls, video_url, shared_link,
+            is_repost, original_author_name, original_author_identifier,
+            hashtags, mentions, posted_at, scraped_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            author_name = excluded.author_name,
+            author_headline = excluded.author_headline,
+            content = excluded.content,
+            post_type = excluded.post_type,
+            likes_count = excluded.likes_count,
+            comments_count = excluded.comments_count,
+            reposts_count = excluded.reposts_count,
+            has_link = excluded.has_link,
+            has_poll = excluded.has_poll,
+            video_url = excluded.video_url,
+            shared_link = excluded.shared_link,
+            hashtags = excluded.hashtags,
+            mentions = excluded.mentions,
+            scraped_at = excluded.scraped_at
+        `).run(
+          post.id,
+          profileRow?.id || null,
+          post.authorPublicIdentifier,
+          cleanName,
+          cleanHeadline,
+          post.authorProfilePictureUrl,
+          post.content,
+          post.postUrl,
+          post.postType || 'text',
+          post.likesCount,
+          post.commentsCount,
+          post.repostsCount,
+          post.hasImage ? 1 : 0,
+          post.hasVideo ? 1 : 0,
+          post.hasDocument ? 1 : 0,
+          post.hasLink ? 1 : 0,
+          post.hasPoll ? 1 : 0,
+          JSON.stringify(post.imageUrls || []),
+          post.videoUrl || null,
+          post.sharedLink ? JSON.stringify(post.sharedLink) : null,
+          post.isRepost ? 1 : 0,
+          post.originalAuthorName || null,
+          post.originalAuthorIdentifier || null,
+          JSON.stringify(post.hashtags || []),
+          JSON.stringify(post.mentions || []),
+          post.postedAt,
+          post.scrapedAt
+        );
+        syncResult.saved++;
+        syncResult.syncedIds.push(post.id);
+      } catch (e) {
+        console.error('Failed to save post:', e);
+        syncResult.failed.push({
+          id: post.id,
+          error: e instanceof Error ? e.message : String(e),
         });
-        profilesCreated++;
       }
     }
-    
-    try {
-      const profileRow = post.authorPublicIdentifier 
-        ? db.prepare('SELECT id FROM profiles WHERE public_identifier = ?').get(post.authorPublicIdentifier) as { id: string } | undefined
-        : undefined;
-      
-      db.prepare(`
-        INSERT INTO posts (
-          id, author_profile_id, author_public_identifier, author_name, author_headline, 
-          author_profile_picture_url, content, post_url, post_type,
-          likes_count, comments_count, reposts_count,
-          has_image, has_video, has_document, has_link, has_poll,
-          image_urls, video_url, shared_link,
-          is_repost, original_author_name, original_author_identifier,
-          hashtags, mentions, posted_at, scraped_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          author_name = excluded.author_name,
-          author_headline = excluded.author_headline,
-          content = excluded.content,
-          post_type = excluded.post_type,
-          likes_count = excluded.likes_count,
-          comments_count = excluded.comments_count,
-          reposts_count = excluded.reposts_count,
-          has_link = excluded.has_link,
-          has_poll = excluded.has_poll,
-          video_url = excluded.video_url,
-          shared_link = excluded.shared_link,
-          hashtags = excluded.hashtags,
-          mentions = excluded.mentions,
-          scraped_at = excluded.scraped_at
-      `).run(
-        post.id,
-        profileRow?.id || null,
-        post.authorPublicIdentifier,
-        cleanName,
-        cleanHeadline,
-        post.authorProfilePictureUrl,
-        post.content,
-        post.postUrl,
-        post.postType || 'text',
-        post.likesCount,
-        post.commentsCount,
-        post.repostsCount,
-        post.hasImage ? 1 : 0,
-        post.hasVideo ? 1 : 0,
-        post.hasDocument ? 1 : 0,
-        post.hasLink ? 1 : 0,
-        post.hasPoll ? 1 : 0,
-        JSON.stringify(post.imageUrls || []),
-        post.videoUrl || null,
-        post.sharedLink ? JSON.stringify(post.sharedLink) : null,
-        post.isRepost ? 1 : 0,
-        post.originalAuthorName || null,
-        post.originalAuthorIdentifier || null,
-        JSON.stringify(post.hashtags || []),
-        JSON.stringify(post.mentions || []),
-        post.postedAt,
-        post.scrapedAt
-      );
-      saved++;
-      syncedIds.push(post.id);
-    } catch (e) {
-      console.error('Failed to save post:', e);
-    }
-  }
-  
-  db.prepare(`
-    INSERT INTO sync_log (type, count, synced_at)
-    VALUES (?, ?, ?)
-  `).run('posts', saved, new Date().toISOString());
-  
-  return c.json({ success: true, saved, total: posts.length, profilesCreated, syncedIds });
+
+    // Log sync operation
+    db.prepare(`
+      INSERT INTO sync_log (type, count, synced_at)
+      VALUES (?, ?, ?)
+    `).run('posts', syncResult.saved, new Date().toISOString());
+
+    return syncResult;
+  });
+
+  return c.json({
+    success: true,
+    saved: result.saved,
+    total: posts.length,
+    profilesCreated: result.profilesCreated,
+    syncedIds: result.syncedIds,
+    failed: result.failed.length > 0 ? result.failed : undefined,
+  });
 });

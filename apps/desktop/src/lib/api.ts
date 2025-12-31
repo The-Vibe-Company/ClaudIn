@@ -30,6 +30,24 @@ export async function createConversation(title?: string) {
   return res.json();
 }
 
+export async function renameConversation(id: string, title: string) {
+  const res = await fetch(`${API_BASE}/chat/conversations/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error('Failed to rename conversation');
+  return res.json();
+}
+
+export async function deleteConversation(id: string) {
+  const res = await fetch(`${API_BASE}/chat/conversations/${id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete conversation');
+  return res.json();
+}
+
 export async function sendMessage(
   conversationId: string,
   message: string,

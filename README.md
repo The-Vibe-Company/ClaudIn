@@ -1,153 +1,194 @@
 # ClaudIn
 
-**Synchronisez LinkedIn et exposez vos données via MCP**
+**Sync your LinkedIn network locally and access it via MCP**
 
-ClaudIn synchronise votre réseau LinkedIn localement et l'expose via un serveur [MCP (Model Context Protocol)](https://modelcontextprotocol.io). Utilisez vos données LinkedIn directement depuis Claude Desktop, Claude Code, ou tout client MCP compatible.
+ClaudIn captures your LinkedIn activity (profiles, posts, messages) as you browse and stores everything locally. Access your network data through Claude Desktop, Claude Code, or any MCP-compatible client.
 
-## Pourquoi ClaudIn ?
+## Why ClaudIn?
 
-- **Vos données, localement** - Tout est stocké sur votre machine dans une base SQLite
-- **MCP-first** - Accédez à votre réseau LinkedIn depuis n'importe quel client MCP
-- **Sync automatique** - L'extension Chrome synchronise vos contacts, messages et posts en arrière-plan
+- **Your data, locally** - Everything stored on your machine in SQLite
+- **MCP-first** - Query your LinkedIn network from Claude Desktop/Code
+- **Passive sync** - The Chrome extension captures data as you browse LinkedIn
+- **Rich data** - Profiles, posts (with links, videos, documents), messages, and more
 
-## Fonctionnalités
+## Features
 
-- **Serveur MCP** - Expose votre réseau LinkedIn à Claude Desktop/Code et autres clients
-- **Extension Chrome** - Synchronise automatiquement profils, messages et publications
-- **Interface desktop** - CRM pour visualiser vos contacts et leurs activités
-
-## Prérequis
-
-- Node.js v22+
-- pnpm 9.15+
-- Rust (pour Tauri)
+- **Chrome Extension** - Automatically syncs profiles, messages, and feed posts
+- **Desktop App** - CRM-like interface to browse your contacts and their activity  
+- **MCP Server** - Expose your LinkedIn data to Claude Desktop/Code
+- **AI Chat** - Built-in chat with context about your network
 
 ## Installation
 
+### Option 1: Download Release (Recommended)
+
+1. Go to [Releases](../../releases) and download:
+   - **Desktop App**: `.dmg` (macOS), `.msi` (Windows), or `.AppImage` (Linux)
+   - **Extension**: `claudin-extension.zip`
+
+2. Install the desktop app
+
+3. Install the Chrome extension:
+   - Unzip `claudin-extension.zip`
+   - Open Chrome → `chrome://extensions`
+   - Enable **Developer mode** (top right)
+   - Click **Load unpacked**
+   - Select the `dist` folder from the unzipped extension
+
+4. Start the desktop app and browse LinkedIn!
+
+### Option 2: Build from Source
+
+#### Prerequisites
+
+- Node.js v22+
+- pnpm 9.15+
+- Rust (for Tauri desktop app)
+
+#### Steps
+
 ```bash
-# Cloner le projet
-git clone <repo-url>
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/ClaudIn.git
 cd ClaudIn
 
-# Installer les dépendances
+# Install dependencies
 pnpm install
-```
 
-## Lancement
-
-### Développement
-
-```bash
-# Lancer tous les services (recommandé)
+# Development mode (all services)
 pnpm dev
-```
 
-Cela démarre :
-- **Serveur backend** sur `http://localhost:3847`
-- **Application desktop** sur `http://localhost:1420`
-- **Extension Chrome** en mode watch
-
-### Lancer individuellement
-
-```bash
-# Serveur uniquement
-pnpm dev:server
-
-# Application desktop uniquement
-pnpm dev:desktop
-
-# Extension Chrome uniquement
-pnpm dev:extension
-```
-
-### Build production
-
-```bash
-# Build complet
+# Or build for production
 pnpm build
-
-# Build application desktop native
 pnpm tauri:build
-
-# Build extension Chrome
-pnpm build:extension
 ```
 
-## Configuration
+#### Load the Extension
 
-### 1. Extension Chrome
+1. Open Chrome → `chrome://extensions`
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select `apps/extension/dist`
 
-1. Ouvrez Chrome et allez sur `chrome://extensions`
-2. Activez le **Mode développeur**
-3. Cliquez sur **Charger l'extension non empaquetée**
-4. Sélectionnez le dossier `apps/extension/dist`
+## Usage
 
-L'extension synchronise automatiquement les données lorsque vous naviguez sur LinkedIn.
+### Basic Usage
 
-### 2. Serveur MCP avec Claude Desktop
+1. **Start the desktop app** - This starts the backend server
+2. **Browse LinkedIn** - The extension automatically captures:
+   - Profile pages you visit
+   - Search results
+   - Feed posts (with links, videos, documents, polls)
+   - Messages
+3. **View your data** in the desktop app's CRM interface
+4. **Use the AI chat** to ask questions about your network
 
-Ajoutez cette configuration dans votre fichier Claude Desktop (`claude_desktop_config.json`) :
+### MCP Integration (Claude Desktop/Code)
+
+Add ClaudIn to your Claude Desktop config:
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "claudin": {
       "command": "node",
-      "args": ["/chemin/vers/ClaudIn/packages/mcp-server/dist/index.js"]
+      "args": ["/path/to/ClaudIn/packages/mcp-server/dist/index.js"]
     }
   }
 }
 ```
 
-Une fois configuré, Claude Desktop peut accéder à votre réseau LinkedIn via les outils MCP :
-- `search_network` - Rechercher des contacts
-- `get_profile_details` - Voir le détail d'un profil
-- `get_profile_posts` - Voir les publications d'un contact
-- `find_people_at_company` - Trouver des contacts dans une entreprise
-- `get_network_stats` - Statistiques de votre réseau
+Then restart Claude Desktop. You can now ask Claude about your LinkedIn network:
 
-## Structure du projet
+- *"Who do I know at Google?"*
+- *"Show me recent posts from my network about AI"*
+- *"Find people I've messaged in the last week"*
+
+### Available MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `search_network` | Search contacts by name, company, title |
+| `get_profile_details` | Get full profile information |
+| `get_profile_posts` | Get posts from a specific contact |
+| `find_people_at_company` | Find all contacts at a company |
+| `get_network_stats` | Statistics about your network |
+
+## Data Captured
+
+### Profiles
+- Name, headline, location, about
+- Current company and title
+- Experience and education history
+- Skills
+
+### Posts
+- Text content and media (images, videos, documents)
+- Shared links with metadata
+- Engagement metrics (likes, comments, reposts)
+- Hashtags and mentions
+- Post type detection (article, video, poll, job, celebration, etc.)
+
+### Messages
+- Conversation threads
+- Message content and timestamps
+
+## Project Structure
 
 ```
 ClaudIn/
 ├── apps/
-│   ├── desktop/      # Application Tauri (React + Rust)
-│   ├── server/       # API backend (Hono + SQLite)
-│   └── extension/    # Extension Chrome
+│   ├── desktop/      # Tauri app (React + Rust)
+│   ├── server/       # Backend API (Hono + SQLite)
+│   └── extension/    # Chrome extension
 ├── packages/
-│   ├── shared/       # Types TypeScript partagés
-│   └── mcp-server/   # Serveur MCP
+│   ├── shared/       # Shared TypeScript types
+│   └── mcp-server/   # MCP server for Claude
 ```
 
-## Technologies
-
-| Composant | Stack |
-|-----------|-------|
-| MCP Server | @modelcontextprotocol/sdk, SQLite |
-| Backend | Hono, SQLite, Zod |
-| Extension | Chrome Manifest V3, Vite |
-| Desktop | React 19, Tauri 2, Tailwind CSS |
-
-## Données
-
-Toutes les données sont stockées localement dans `~/.claudin/claudin.db` (SQLite).
-
-Les données synchronisées incluent :
-- Profils LinkedIn (nom, titre, entreprise, compétences...)
-- Messages
-- Publications du feed
-- Historique des conversations IA
-
-## Commandes utiles
+## Development
 
 ```bash
-pnpm dev          # Développement
-pnpm build        # Build production
-pnpm lint         # Vérification du code
-pnpm typecheck    # Vérification TypeScript
-pnpm clean        # Nettoyer les builds
+# Start all services in dev mode
+pnpm dev
+
+# Run individual services
+pnpm dev:server      # Backend only
+pnpm dev:desktop     # Desktop app only
+pnpm dev:extension   # Extension (watch mode)
+
+# Type checking
+pnpm typecheck
+
+# Build everything
+pnpm build
 ```
 
-## Licence
+## Data Storage
+
+All data is stored locally in `~/.claudin/claudin.db` (SQLite).
+
+## Tech Stack
+
+| Component | Technologies |
+|-----------|--------------|
+| Desktop | React 19, Tauri 2, Tailwind CSS |
+| Backend | Hono, SQLite, better-sqlite3 |
+| Extension | Chrome Manifest V3, Vite |
+| MCP Server | @modelcontextprotocol/sdk |
+| Shared | TypeScript, Zod |
+
+## Privacy
+
+ClaudIn is designed with privacy in mind:
+- All data stays on your machine
+- No external servers or cloud storage
+- You control what gets synced
+- Delete your data anytime by removing `~/.claudin/`
+
+## License
 
 MIT

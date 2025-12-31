@@ -418,16 +418,23 @@ async function syncToServer(): Promise<{ success: boolean; profiles?: number; me
         body: JSON.stringify({ profiles: unsyncedProfiles }),
       });
       if (res.ok) {
-        const result = await res.json() as { saved: number; syncedIds?: string[] };
+        const result = await res.json() as { saved: number; syncedIds: string[]; failed?: Array<{ id: string; error: string }> };
         profilesSynced = result.saved;
-        
-        const syncedIds = result.syncedIds || unsyncedProfiles.map(p => p.publicIdentifier);
-        for (const id of syncedIds) {
-          const profile = profilesCache.get(id);
-          if (profile) {
-            profile.syncedAt = now;
-            profilesCache.set(id, profile);
+
+        // Only mark items as synced if server confirmed them
+        if (result.syncedIds && Array.isArray(result.syncedIds)) {
+          for (const id of result.syncedIds) {
+            const profile = profilesCache.get(id);
+            if (profile) {
+              profile.syncedAt = now;
+              profilesCache.set(id, profile);
+            }
           }
+        }
+
+        // Log failed items for debugging
+        if (result.failed && result.failed.length > 0) {
+          console.warn(`[ClaudIn] ${result.failed.length} profiles failed to sync:`, result.failed);
         }
       }
     }
@@ -439,16 +446,23 @@ async function syncToServer(): Promise<{ success: boolean; profiles?: number; me
         body: JSON.stringify({ messages: unsyncedMessages }),
       });
       if (res.ok) {
-        const result = await res.json() as { saved: number; syncedIds?: string[] };
+        const result = await res.json() as { saved: number; syncedIds: string[]; failed?: Array<{ id: string; error: string }> };
         messagesSynced = result.saved;
-        
-        const syncedIds = result.syncedIds || unsyncedMessages.map(m => m.id);
-        for (const id of syncedIds) {
-          const msg = messagesCache.get(id);
-          if (msg) {
-            msg.syncedAt = now;
-            messagesCache.set(id, msg);
+
+        // Only mark items as synced if server confirmed them
+        if (result.syncedIds && Array.isArray(result.syncedIds)) {
+          for (const id of result.syncedIds) {
+            const msg = messagesCache.get(id);
+            if (msg) {
+              msg.syncedAt = now;
+              messagesCache.set(id, msg);
+            }
           }
+        }
+
+        // Log failed items for debugging
+        if (result.failed && result.failed.length > 0) {
+          console.warn(`[ClaudIn] ${result.failed.length} messages failed to sync:`, result.failed);
         }
       }
     }
@@ -460,16 +474,23 @@ async function syncToServer(): Promise<{ success: boolean; profiles?: number; me
         body: JSON.stringify({ posts: unsyncedPosts }),
       });
       if (res.ok) {
-        const result = await res.json() as { saved: number; syncedIds?: string[] };
+        const result = await res.json() as { saved: number; syncedIds: string[]; failed?: Array<{ id: string; error: string }> };
         postsSynced = result.saved;
-        
-        const syncedIds = result.syncedIds || unsyncedPosts.map(p => p.id);
-        for (const id of syncedIds) {
-          const post = postsCache.get(id);
-          if (post) {
-            post.syncedAt = now;
-            postsCache.set(id, post);
+
+        // Only mark items as synced if server confirmed them
+        if (result.syncedIds && Array.isArray(result.syncedIds)) {
+          for (const id of result.syncedIds) {
+            const post = postsCache.get(id);
+            if (post) {
+              post.syncedAt = now;
+              postsCache.set(id, post);
+            }
           }
+        }
+
+        // Log failed items for debugging
+        if (result.failed && result.failed.length > 0) {
+          console.warn(`[ClaudIn] ${result.failed.length} posts failed to sync:`, result.failed);
         }
       }
     }
