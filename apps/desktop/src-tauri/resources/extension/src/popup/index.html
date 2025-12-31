@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClaudIn</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #ffffff;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    
+    .stats {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+    }
+    
+    .stat-row:not(:last-child) {
+      border-bottom: 1px solid #2a2a2a;
+    }
+    
+    .stat-label {
+      color: #888;
+      font-size: 13px;
+    }
+    
+    .stat-value {
+      font-weight: 600;
+      font-size: 15px;
+    }
+    
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: #1a2e1a;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    
+    .status-time {
+      margin-left: auto;
+      color: #4ade80;
+      font-size: 11px;
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #4ade80;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .sync-btn {
+      width: 100%;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    
+    .sync-btn:hover {
+      opacity: 0.9;
+    }
+    
+    .sync-btn:active {
+      transform: scale(0.98);
+    }
+    
+    .sync-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .sync-btn.syncing {
+      background: #2a2a2a;
+    }
+    
+    .sync-result {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    
+    .sync-result.success {
+      display: block;
+      background: #1a2e1a;
+      color: #4ade80;
+    }
+    
+    .sync-result.error {
+      display: block;
+      background: #2e1a1a;
+      color: #f87171;
+    }
+    
+    .footer {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 11px;
+      color: #666;
+    }
+    
+    .unsynced-section {
+      background: linear-gradient(135deg, #1a2a1a, #1a1a2a);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid #2a4a2a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    
+    .unsynced-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .unsynced-icon {
+      font-size: 14px;
+    }
+    
+    .unsynced-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #4ade80;
+    }
+    
+    .unsynced-count {
+      font-size: 12px;
+      color: #a0ffa0;
+      font-weight: 500;
+    }
+    
+    .queue-section {
+      background: #1a1a2e;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid #2a2a4a;
+    }
+    
+    .queue-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    
+    .queue-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #a0a0ff;
+    }
+    
+    .queue-badge {
+      background: #3b82f6;
+      color: white;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+    
+    .queue-stats {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .queue-stat {
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+      background: #252540;
+      border-radius: 6px;
+    }
+    
+    .queue-stat.processing {
+      background: #2a2a1a;
+    }
+    
+    .queue-stat.completed {
+      background: #1a2a1a;
+    }
+    
+    .queue-stat-value {
+      display: block;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+    
+    .queue-stat.processing .queue-stat-value {
+      color: #fbbf24;
+    }
+    
+    .queue-stat.completed .queue-stat-value {
+      color: #4ade80;
+    }
+    
+    .queue-stat-label {
+      font-size: 9px;
+      color: #888;
+      text-transform: uppercase;
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index.html-BMnaaskZ.js"></script>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">C</div>
+    <h1>ClaudIn</h1>
+  </div>
+  
+  <div class="stats">
+    <div class="stat-row">
+      <span class="stat-label">Profiles</span>
+      <span class="stat-value" id="profileCount">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Messages</span>
+      <span class="stat-value" id="messageCount">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Posts</span>
+      <span class="stat-value" id="postCount">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Last activity</span>
+      <span class="stat-value" id="lastSync">Never</span>
+    </div>
+  </div>
+  
+  <div class="status">
+    <div class="status-dot"></div>
+    <span>Auto-sync every 5 min</span>
+    <span class="status-time" id="lastServerSync"></span>
+  </div>
+  
+  <div class="unsynced-section" id="unsyncedSection" style="display: none;">
+    <div class="unsynced-header">
+      <span class="unsynced-icon">⬆</span>
+      <span class="unsynced-title">To sync</span>
+    </div>
+    <div class="unsynced-count" id="unsyncedCount">0 items</div>
+  </div>
+  
+  <div class="queue-section" id="queueSection" style="display: none;">
+    <div class="queue-header">
+      <span class="queue-title">Enrichment Queue</span>
+      <span class="queue-badge" id="queueBadge">0</span>
+    </div>
+    <div class="queue-stats">
+      <div class="queue-stat">
+        <span class="queue-stat-value" id="queuePending">0</span>
+        <span class="queue-stat-label">Pending</span>
+      </div>
+      <div class="queue-stat processing">
+        <span class="queue-stat-value" id="queueProcessing">0</span>
+        <span class="queue-stat-label">Processing</span>
+      </div>
+      <div class="queue-stat completed">
+        <span class="queue-stat-value" id="queueCompleted">0</span>
+        <span class="queue-stat-label">Done</span>
+      </div>
+    </div>
+  </div>
+  
+  <button class="sync-btn" id="syncBtn">
+    Sync Now
+  </button>
+  
+  <div class="sync-result" id="syncResult"></div>
+  
+  <div class="footer">
+    Browse LinkedIn profiles to collect data
+  </div>
+  
+</body>
+</html>

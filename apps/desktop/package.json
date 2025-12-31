@@ -8,15 +8,20 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "copy-extension": "rm -rf src-tauri/resources/extension && mkdir -p src-tauri/resources/extension && cp -r ../extension/dist/* src-tauri/resources/extension/",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:dev": "pnpm copy-extension && tauri dev",
+    "tauri:build": "pnpm copy-extension && tauri build"
   },
   "dependencies": {
     "@claudin/shared": "workspace:*",
     "@tanstack/react-query": "^5.62.8",
     "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-dialog": "^2.4.2",
+    "@tauri-apps/plugin-fs": "^2.4.4",
+    "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.3",
+    "@tauri-apps/plugin-updater": "^2.9.0",
     "cmdk": "^1.0.4",
     "framer-motion": "^11.15.0",
     "lucide-react": "^0.468.0",

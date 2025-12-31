@@ -189,6 +189,37 @@ ClaudIn is designed with privacy in mind:
 - You control what gets synced
 - Delete your data anytime by removing `~/.claudin/`
 
+## Releasing (Maintainers)
+
+### Setup Auto-Updates
+
+1. Generate a signing key pair:
+   ```bash
+   pnpm tauri signer generate -w ~/.tauri/claudin.key
+   ```
+
+2. Add secrets to GitHub repository:
+   - `TAURI_SIGNING_PRIVATE_KEY`: Contents of `~/.tauri/claudin.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: The password you used
+
+3. Update `apps/desktop/src-tauri/tauri.conf.json`:
+   - Replace `OWNER` with your GitHub username in the updater endpoint
+
+### Create a Release
+
+```bash
+# Bump version in package.json and tauri.conf.json
+# Then tag and push
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The GitHub Action will:
+1. Build the desktop app for macOS, Windows, and Linux
+2. Bundle the Chrome extension inside the app
+3. Create a draft release with all artifacts
+4. Generate `latest.json` for auto-updates
+
 ## License
 
 MIT
