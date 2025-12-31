@@ -10,6 +10,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [extensionPath, setExtensionPath] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     extractExtension();
@@ -139,16 +140,45 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-text-primary mb-2">Load in Chrome</h3>
+                  
+                  <div className="bg-bg-tertiary rounded-lg p-3 mb-4">
+                    <p className="text-text-tertiary text-xs mb-1">Extension folder path:</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm text-text-primary font-mono flex-1 break-all">
+                        {extensionPath}
+                      </code>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(extensionPath);
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 2000);
+                        }}
+                        className="p-1.5 hover:bg-border-subtle rounded transition-colors flex-shrink-0"
+                        title="Copy path"
+                      >
+                        {copied ? (
+                          <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4 text-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
                   <ol className="text-text-secondary text-sm space-y-2 list-decimal list-inside mb-4">
-                    <li>Click the buttons below to open Chrome and the extension folder</li>
-                    <li>In Chrome, enable <strong className="text-text-primary">Developer mode</strong> (top right)</li>
+                    <li>Click <strong className="text-text-primary">Open Chrome Extensions</strong> below</li>
+                    <li>Enable <strong className="text-text-primary">Developer mode</strong> (top right toggle)</li>
                     <li>Click <strong className="text-text-primary">Load unpacked</strong></li>
-                    <li>Select the extension folder that just opened</li>
+                    <li>Paste the path above or navigate to the folder</li>
                   </ol>
                   <div className="flex gap-3">
                     <button
                       onClick={openChromeExtensions}
-                      className="flex-1 py-2 px-4 bg-bg-tertiary hover:bg-border-subtle text-text-primary font-medium rounded-lg transition-colors"
+                      className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
                     >
                       Open Chrome Extensions
                     </button>
@@ -156,7 +186,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                       onClick={openExtensionFolder}
                       className="flex-1 py-2 px-4 bg-bg-tertiary hover:bg-border-subtle text-text-primary font-medium rounded-lg transition-colors"
                     >
-                      Open Extension Folder
+                      Open Folder
                     </button>
                   </div>
                 </div>

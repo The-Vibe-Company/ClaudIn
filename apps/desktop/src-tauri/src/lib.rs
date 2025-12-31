@@ -19,9 +19,10 @@ fn is_extension_extracted() -> Result<bool, String> {
 fn extract_extension(app_handle: tauri::AppHandle) -> Result<String, String> {
     let extension_dir = get_extension_dir()?;
     
-    if !extension_dir.exists() {
-        fs::create_dir_all(&extension_dir).map_err(|e| e.to_string())?;
+    if extension_dir.exists() {
+        fs::remove_dir_all(&extension_dir).map_err(|e| e.to_string())?;
     }
+    fs::create_dir_all(&extension_dir).map_err(|e| e.to_string())?;
     
     let resource_path = app_handle
         .path()
@@ -29,9 +30,23 @@ fn extract_extension(app_handle: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e: tauri::Error| e.to_string())?
         .join("extension");
     
-    if resource_path.exists() {
-        copy_dir_recursive(&resource_path, &extension_dir)?;
-    }
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    
+    let dev_paths = vec![
+        cwd.join("src-tauri").join("resources").join("extension"),
+        cwd.join("resources").join("extension"),
+    ];
+    
+    let source_path = if resource_path.join("manifest.json").exists() {
+        resource_path
+    } else {
+        dev_paths
+            .into_iter()
+            .find(|p| p.join("manifest.json").exists())
+            .ok_or("Extension resources not found")?
+    };
+    
+    copy_dir_recursive(&source_path, &extension_dir)?;
     
     Ok(extension_dir.to_string_lossy().to_string())
 }
